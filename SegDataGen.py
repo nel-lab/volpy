@@ -447,7 +447,7 @@ class NumpyArrayIterator(Iterator):
             index_array, current_index, current_batch_size = next(self.index_generator)
         # The transformation of images is not under thread lock so it can be done in parallel
         img_shapes = list(self.X.shape)[1:]
-        out_shapes = list(self.Y.shape)[1:]
+        out_shapes = list(self.y.shape)[1:]
         if self.image_data_generator.random_crops:
             img_shapes[:2] = self.image_data_generator.random_crops
             out_shapes[:2] = self.image_data_generator.random_crops
