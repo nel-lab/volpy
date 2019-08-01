@@ -447,11 +447,13 @@ class NumpyArrayIterator(Iterator):
             index_array, current_index, current_batch_size = next(self.index_generator)
         # The transformation of images is not under thread lock so it can be done in parallel
         img_shapes = list(self.X.shape)[1:]
+        out_shapes = list(self.Y.shape)[1:]
         if self.image_data_generator.random_crops:
             img_shapes[:2] = self.image_data_generator.random_crops
+            out_shapes[:2] = self.image_data_generator.random_crops
         
         batch_x = np.zeros(tuple([current_batch_size] + img_shapes))
-        batch_y = np.zeros(tuple([current_batch_size] + img_shapes))
+        batch_y = np.zeros(tuple([current_batch_size] + out_shapes))
         # Load the data data Outside the for loop. It's much faster when dealing with HDF5
         self_X = self.X[index_array]
         self_y = self.y[index_array]
@@ -461,7 +463,7 @@ class NumpyArrayIterator(Iterator):
             label = self_y[i]
             batch_x[i], batch_y[i] = self.image_data_generator.random_transform(x.astype('float32').copy(), label.astype("float32").copy())
             batch_x[i] = self.image_data_generator.standardize(batch_x[i])
-            
+        
         if self.save_to_dir:
             for i in range(current_batch_size):
                 img = array_to_img(batch_x[i], self.dim_ordering, scale=True)
