@@ -23,8 +23,8 @@ model = unet_2D(in_shape, nkernels)
 
 print(model.summary())
 
-x = np.random.rand(121,200,256,2)
-y = np.ones((121,200,256,2))
+x = np.random.rand(121,1200,256,2)
+y = np.ones((121,1200,256,2))
 
 n_steps = len(x)/batch_size
 
@@ -36,7 +36,8 @@ datagen = SegmentationDataGenerator(rotation_range=10.,
                                      zoom_range=0.0,
                                      horizontal_flip=True,
                                      vertical_flip=True,
-                                     dim_ordering = 'tf')
+                                     dim_ordering = 'tf',
+                                     random_crops = (128,128))
 
 iterator = datagen.flow(x, y, batch_size)
 
@@ -50,3 +51,4 @@ for epoch in range(epochs):
     print(get_metric(y_true,y_pred))
 
 #%%
+#x,y = iterator.next()
