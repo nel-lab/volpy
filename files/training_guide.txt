@@ -1,0 +1,44 @@
+Guide for training your own datasets with Mask R-CNN for neuron detection.
+
+Step1 Prepare necessary files for training 
+(1) Clone the Mask R-CNN repository in github: https://github.com/matterport/Mask_RCNN.
+(2) Create folder Mask_RCNN/samples/neurons and copy the caiman/source_extraction/volpy/mrcnn/neurons.py file into the folder. This file contains configuration for training the network.   
+(3) Create Mask_RCNN/datasets/neurons/train and Mask_RCNN/datasets/neurons/val folders for training and validation datasets.
+
+Step2 Motion correction 
+Motion correct all voltage imaging videos you have following demo voltage imaging instruction.
+
+Step3 Prepare summary images
+Following the demo and prepare a stack of summary images (mean and correlation images) for each motion corrected video. Save it into .npz file and .tif file. 
+.npz file is used for training the data. It should be saved to your datasets folder 
+.tif file is used for labeling the data. It can be saved elsewhere.
+
+Step4 Annotate your data in ImageJ using cell magic wand tool
+(1) Open the .tif file of summary images in ImageJ 
+(2) Open ROI Manager under Analyze > Tools
+(3) Use Cell Magic Wand plugin and click on neurons in the image
+(4) Click Add button in ROI Manager to add the selected neuron
+(5) Repeat (3) and (4) until selecting all neurons in mean and 
+     corr images, click More > Save to save the result into .zip file
+(6) Use the following code to transform .zip file into _mask.npz file so that VolPy can read. Save the output file also to the datasets folder
+	"""
+	import zipfile
+	from caiman.base.rois import nf_read_roi
+	with zipfile.ZipFile(zip_file_name) as zf:
+	names = zf.namelist()
+	coords = [nf_read_roi(zf.open(n))
+		for n in names]
+	polygons = [{'name': 'polygon','all_points_x':i[:,1],'all_points_y':i[:,0]} for i in coords]
+	np.savez(mask_npz_file_name, polygons)
+	"""
+
+Step5 Train your data!
+You may need to first download the weights pretrained on coco datasets. Just follow the instruction in Mask_RCNN github repository.
+Type the following code into the terminal:
+	python3 neurons.py train --dataset=Mask_RCNN/datasets/neurons/train --weights=coco
+You can test and see the result following the code in demo afterwards.
+
+
+ 
+
+
