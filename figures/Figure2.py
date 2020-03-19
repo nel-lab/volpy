@@ -3,7 +3,7 @@
 """
 Created on Thu Feb 13 14:38:44 2020
 
-@author: nel
+@author: Changjia
 """
 
 import caiman as cm
