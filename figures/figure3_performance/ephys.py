@@ -4,75 +4,8 @@ File for processing simultaneous electrophysiology with voltage imaging data
 @author: caichangjia
 """
 
-#%% 
-import numpy as np
-import matplotlib
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-import matplotlib.pyplot as plt
-root_dir = '/home/nel/data/voltage_data/simul_electr/johannes/09282017Fish1-1'
-#root_dir = '/home/nel/data/voltage_data/simul_electr/johannes/10052017Fish2-2'
-#root_dir = '/home/nel/data/voltage_data/simul_electr/johannes/09212017Fish1-1'
-
-#%%
-ephys = np.load(os.path.join(root_dir, 'ephys.npy'))
-frame_timing = np.load(os.path.join(root_dir,'frame_timing.npy'))
-imaging_signal = np.load(os.path.join(root_dir, 'imaging_signal.npy'))
-
-plt.plot(ephys);plt.hlines(0.5, 0, len(ephys), linestyles='dashed', color='gray')
-plt.plot(frame_timing,(-imaging_signal+1)*20)
-#ephys = ephys[np.newaxis,:]
-#ephys = np.vstack([ephys,ephys])
-
-
-#%%
-import scipy.signal
-#ephys = -ephys
-n = 0
-hline = 0.45
-trace = vpy.estimates['trace_processed'][n][:len(frame_timing)]
-trace = trace - np.mean(trace)
-spikes = vpy.estimates['spikes'][n].copy()
-spikes = np.delete(spikes, np.where(spikes>len(frame_timing))).astype(np.int32)
-
-timepoint = frame_timing
-scope = [0, len(ephys)]
-
-ephys = ephys/np.max(ephys)
-trace = trace/np.max(trace)
-
-plt.plot(frame_timing, trace, label='volpy',color='orange')
-plt.plot(frame_timing[spikes], 1.1 * np.max(trace) * np.ones(spikes.shape),
-         color='orange', marker='.', fillstyle='none', linestyle='none')
-plt.plot(ephys, label='ephys', color='blue')
-plt.hlines(hline, 0, len(ephys), linestyles='dashed', color='gray')
-etime = scipy.signal.find_peaks(ephys, hline, distance=200)[0]
-plt.plot(etime,  np.max(ephys) * 1.2 * np.ones(etime.shape),
-         color='b', marker='.', fillstyle='none', linestyle='none')
-plt.legend()
-
-#%%
-import scipy.io
-scipy.io.savemat('ephys.mat',{'data':ephys})
-fname = 'times_ephys.mat'
-f = scipy.io.loadmat(fname)
-ff = f['cluster_class'][np.where(np.logical_or(f['cluster_class'][:,0] == 0, f['cluster_class'][:,0] == 0))[0]]
-#ff = f['cluster_class']
-etime = (ff[:,1]/1000*30000).astype(np.int32)
-#etime = np.array(np.where(ephys>0.6))
-
-
-#%%
-#vpy_atm = np.load('estimate_atm.npy', allow_pickle=True).item()
-vpy_pur = np.load('estimate_pur.npy', allow_pickle=True).item()
-
-scope = [100000, 200000]
-precision, recall, F1 = compare_with_ephys_match(sg_gt=ephys, 
-                                                 sp_gt=etime, sg=trace, sp=spikes, timepoint=timepoint, scope=scope, hline=hline)  
-plt.savefig('result_pur.pdf')
-
-#%%
-def compare_with_ephys_match(sg_gt, sp_gt, sg, sp, timepoint, scope=None, hline=None):
+#%% Some functions
+def compare_with_ephys_match(sg_gt, sp_gt, sg, sp, timepoint, max_dist=None, scope=None, hline=None):
     """ Match spikes from ground truth data and spikes from inference.
     Args:
         timepoint: map between gt signal and inference signal (normally not one to one)
@@ -92,7 +25,7 @@ def compare_with_ephys_match(sg_gt, sp_gt, sg, sp, timepoint, scope=None, hline=
     plt.plot(sg_gt, color='b', label='ephys')
     plt.plot(sp_gt, 1.2*height*np.ones(sp_gt.shape),color='b', marker='.', ms=2, fillstyle='full', linestyle='none')
     plt.plot(time, sg, color='orange', label='VolPy')
-    plt.plot(sp, 1*height*np.ones(len(sp)),color='orange', marker='o', ms=2, fillstyle='full', linestyle='none')
+    plt.plot(sp, 1*height*np.ones(len(sp)),color='orange', marker='.', ms=2, fillstyle='full', linestyle='none')
     plt.hlines(hline, 0, len(sg_gt), linestyles='dashed', color='gray')
     ax = plt.gca()
     ax.locator_params(nbins=7)
@@ -100,7 +33,7 @@ def compare_with_ephys_match(sg_gt, sp_gt, sg, sp, timepoint, scope=None, hline=
     ax.spines['top'].set_visible(False)
     
     # Distance matrix and find matches
-    D = distance_spikes(s1=sp_gt, s2=sp, max_dist=500)
+    D = distance_spikes(s1=sp_gt, s2=sp, max_dist=max_dist)
     index_gt, index_method = find_matches(D)
     for i in range(len(index_gt)):
         plt.plot((sp_gt[index_gt[i]], sp[index_method[i]]),(1.15*height, 1.05*height), color='gray',alpha=0.5, linewidth=1)
@@ -147,7 +80,167 @@ def find_matches(D):
     index_method = np.delete(index_method, del_list)
     return index_gt, index_method
 
+#%% Johannes's data
+import numpy as np
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+import matplotlib.pyplot as plt
+#root_dir = '/home/nel/data/voltage_data/simul_electr/johannes/09282017Fish1-1'
+root_dir = '/home/nel/data/voltage_data/simul_electr/johannes/10052017Fish2-2'
+#root_dir = '/home/nel/data/voltage_data/simul_electr/johannes/09212017Fish1-1'
 
+#%% Load signal
+ephys = np.load(os.path.join(root_dir, 'ephys.npy'))
+frame_timing = np.load(os.path.join(root_dir,'frame_timing.npy'))
+imaging_signal = np.load(os.path.join(root_dir, 'imaging_signal.npy'))
+plt.plot(ephys);plt.hlines(0.5, 0, len(ephys), linestyles='dashed', color='gray')
+plt.plot(frame_timing,(-imaging_signal+1)*20)
+
+#%% Pre-processing
+import scipy.signal
+n = 0
+hline = 0.5
+estimates = np.load(os.path.join(root_dir, 'estimates.npz'), allow_pickle=True)['arr_0'].item()
+trace = estimates['trace_processed'][n][:len(frame_timing)]
+trace = trace - np.mean(trace)
+spikes = estimates['spikes'][n].copy()
+spikes = np.delete(spikes, np.where(spikes>len(frame_timing))).astype(np.int32)
+timepoint = frame_timing
+scope = [0, len(ephys)]
+ephys = ephys/np.max(ephys)
+trace = trace/np.max(trace)
+
+plt.plot(frame_timing, trace, label='volpy',color='orange')
+plt.plot(frame_timing[spikes], 1.1 * np.max(trace) * np.ones(spikes.shape),
+         color='orange', marker='.', fillstyle='none', linestyle='none')
+plt.plot(ephys, label='ephys', color='blue')
+plt.hlines(hline, 0, len(ephys), linestyles='dashed', color='gray')
+etime = scipy.signal.find_peaks(ephys, hline, distance=200)[0]
+plt.plot(etime,  np.max(ephys) * 1.2 * np.ones(etime.shape),
+         color='b', marker='.', fillstyle='none', linestyle='none')
+plt.legend()
+
+#%% Comparison of signal
+scope = [0, 600000]
+max_dist = 500
+precision, recall, F1 = compare_with_ephys_match(sg_gt=ephys, sp_gt=etime, sg=trace, 
+                                                 sp=spikes, timepoint=timepoint, 
+                                                 max_dist=max_dist, scope=scope, hline=hline)  
+plt.savefig(os.path.join(root_dir, 'result_new.pdf'))
+
+#%% Spatial footprint
+Xinds = estimates['ROI'][n][:,0] 
+Yinds = estimates['ROI'][n][:,1]
+plt.figure(); plt.imshow(estimates['spatialFilter'][n][Xinds[0] : Xinds[-1] + 1, Yinds[0] : Yinds[-1] + 1] ) 
+plt.savefig(os.path.join(root_dir, 'spatial_new.pdf'))
+
+#%% Kaspar's data 
+root_dir = '/home/nel/data/voltage_data/simul_electr/kaspar/Ground truth data/Session1'
+
+n = 0
+fr = 20000
+scope = [2000000,3000000]
+#scope = [2500000,3500000]
+fname = '/home/nel/Dropbox_old/Kaspar-Andrea/Ground truth data/Ephys_data_session6_s2.mat'
+fname = '/home/nel/data/voltage_data/simul_electr/kaspar/Ground truth data/Ephys_data_session1.mat'
+f = scipy.io.loadmat(fname)
+frames = np.where(np.logical_and(f['read_starts'][0]>scope[0], f['read_starts'][0]<scope[1]))[0]
+timepoint = np.array([f['read_starts'][0][frames[i]]-scope[0] for i in range(frames.shape[0])])
+
+ephys = f['v'][0][scope[0]:scope[-1]]
+plot_signal_and_spike(ephys, etime, scope)
+trace = estimates['trace_processed'][n]
+spikes = estimates['spikes'][n]
+ephys = ephys - np.mean(ephys)
+ephys = ephys/np.max(ephys)
+trace = trace/np.max(trace)
+etime = scipy.signal.find_peaks(ephys, 0.5, distance=200)[0]
+
+#%% Comparison
+precision, recall, F1 = compare_with_ephys_match(sg_gt=ephys, sp_gt=etime, sg=trace, 
+                                                 sp=spikes, timepoint=timepoint, 
+                                                 max_dist=500, scope=[0,1000000], hline=0.4)  
+
+plt.savefig(os.path.join(root_dir, 'result_new.pdf'))
+
+#%% Spatial footprint
+Xinds = estimates['ROI'][n][:,0] 
+Yinds = estimates['ROI'][n][:,1]
+plt.figure(); plt.imshow(estimates['spatialFilter'][n][Xinds[0] : Xinds[-1] + 1, Yinds[0] : Yinds[-1] + 1] ) 
+plt.savefig(os.path.join(root_dir, 'spatial_new.pdf'))
+
+#%% Visualize F1 score
+width = 0.2  # the width of the bars
+m = [0.991, 0.934, 0.918]
+fig, ax = plt.subplots()
+x = 0
+rects2 = ax.bar(x - width/2, m[2], width/2, label='Fish1',color='r')
+rects3 = ax.bar(x , m[1], width/2, label='Fish2',color='gray')
+rects1 = ax.bar(x + width/2, m[0], width/2, label='Mouse',color='b')
+
+# Add some text for labels, title and custom x-axis tick labels, etc.
+ax.set_ylabel('Scores')
+ax.set_ylabel('F1 score')
+ax.set_ylim([0.60,1.00])
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+plt.xticks([])
+ax.legend(loc=1)
+plt.savefig(os.path.join('/home/nel/data/voltage_data/simul_electr', 'F1_ephys.pdf'))
+
+
+
+
+
+
+#%% Backup
+
+
+
+
+
+#%% Others
+import numpy as np
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+import matplotlib.pyplot as plt
+import caiman as cm
+import scipy.io
+
+def plot_signal_and_spike(sg, sp, scope=None):
+    if scope is not None:
+        sg = sg[scope[0]:scope[1]]
+        sp = sp[np.where(np.logical_and(sp>scope[0], sp<scope[1]))]
+        plt.plot(sg)
+        plt.plot(sp-scope[0], np.max(sg)*np.ones(sp.shape),color='g', marker='o', fillstyle='none', linestyle='none')
+    else:
+        plt.plot(sg)
+        plt.plot(sp, np.max(sg)*np.ones(sp.shape),color='g', marker='o', fillstyle='none', linestyle='none')
+    
+def compare_with_ephys(sg_gt, sp_gt, sg, sp, timepoint, scope=None):
+    height = np.max(np.array([np.max(sg_gt), np.max(sg)]))
+    sg_gt = sg_gt[scope[0]:scope[1]]
+    sp_gt = sp_gt[np.where(np.logical_and(sp_gt>scope[0], sp_gt<scope[1]))]
+    plt.plot(sg_gt, color='b', label='ephys')
+    plt.plot(sp_gt-scope[0], (height+2)*np.ones(sp_gt.shape),color='b', marker='o', fillstyle='none', linestyle='none')
+    timepoint = [i-scope[0] for i in timepoint]
+    plt.plot(timepoint, sg, color='orange', label='VolPy')
+    sp = [timepoint[i] for i in sp]
+    plt.plot(sp, (height+5)*np.ones(len(sp)),color='orange', marker='o', fillstyle='none', linestyle='none')
+    plt.legend()
+
+
+#%%
+import scipy.io
+scipy.io.savemat('ephys.mat',{'data':ephys})
+fname = 'times_ephys.mat'
+f = scipy.io.loadmat(fname)
+ff = f['cluster_class'][np.where(np.logical_or(f['cluster_class'][:,0] == 0, f['cluster_class'][:,0] == 0))[0]]
+#ff = f['cluster_class']
+etime = (ff[:,1]/1000*30000).astype(np.int32)
+#etime = np.array(np.where(ephys>0.6))
 #%%
 cd '/home/nel/anaconda3/envs/ephys/etc/mountainlab/packages/ml_pyms/mlpy'
 from mdaio import writemda16i,writemda32,readmda
@@ -207,77 +300,6 @@ plt.imshow(-vpy.estimates['spatialFilter'][0])
 
 
 #%% Kaspar & Amrita
-import numpy as np
-import matplotlib
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-import matplotlib.pyplot as plt
-import caiman as cm
-import scipy.io
-
-def plot_signal_and_spike(sg, sp, scope=None):
-    if scope is not None:
-        sg = sg[scope[0]:scope[1]]
-        sp = sp[np.where(np.logical_and(sp>scope[0], sp<scope[1]))]
-        plt.plot(sg)
-        plt.plot(sp-scope[0], np.max(sg)*np.ones(sp.shape),color='g', marker='o', fillstyle='none', linestyle='none')
-    else:
-        plt.plot(sg)
-        plt.plot(sp, np.max(sg)*np.ones(sp.shape),color='g', marker='o', fillstyle='none', linestyle='none')
-    
-def compare_with_ephys(sg_gt, sp_gt, sg, sp, timepoint, scope=None):
-    height = np.max(np.array([np.max(sg_gt), np.max(sg)]))
-    sg_gt = sg_gt[scope[0]:scope[1]]
-    sp_gt = sp_gt[np.where(np.logical_and(sp_gt>scope[0], sp_gt<scope[1]))]
-    plt.plot(sg_gt, color='b', label='ephys')
-    plt.plot(sp_gt-scope[0], (height+2)*np.ones(sp_gt.shape),color='b', marker='o', fillstyle='none', linestyle='none')
-    timepoint = [i-scope[0] for i in timepoint]
-    plt.plot(timepoint, sg, color='orange', label='VolPy')
-    sp = [timepoint[i] for i in sp]
-    plt.plot(sp, (height+5)*np.ones(len(sp)),color='orange', marker='o', fillstyle='none', linestyle='none')
-    plt.legend()
-
-#%% 
-precision, recall, F1 = compare_with_ephys_match(sg_gt=signal, sp_gt=spike, sg=-signal1, sp=spike1, timepoint=timepoint, scope=scope, hline=hline)  
-
-plt.savefig('/home/nel/Dropbox_old/Kaspar-Andrea/Ground truth data/Session1/Session1_ephys.pdf')
-#%%
-sg_gt=signal+20
-sp_gt=spike
-sg=-signal1
-sp=spike1
-    
-fr = 20000
-scope = [2000000,3000000]
-scope = [2500000,3500000]
-fname = '/home/nel/Dropbox_old/Kaspar-Andrea/Ground truth data/Ephys_data_session6_s2.mat'
-f = scipy.io.loadmat(fname)
-signal = f['v'][0]
-spike = f['spike_times'][0]*20000
-spike = scipy.signal.find_peaks(signal, 5, distance=200)[0]
-plot_signal_and_spike(signal, spike, scope)
-
-frames = np.where(np.logical_and(f['read_starts'][0]>scope[0], f['read_starts'][0]<scope[1]))[0]
-timepoint = [f['read_starts'][0][frames[i]] for i in range(frames.shape[0])]
-
-f['curr_inj_stops']
-#%%
-n = 0
-signal1 = vpy.estimates['trace'][n][:24908]
-spike1 = vpy.estimates['spikeTimes'][n]
-#plot_signal_and_spike(-signal1, spike1, scope=None)
-
-signal = (signal-np.mean(signal[scope[0]:scope[1]]))/np.max(signal[scope[0]:scope[1]])
-signal1 = (signal1-np.mean(signal1))/np.max(signal1)
-
-#%%
-precision, recall, F1 = compare_with_ephys_match(sg_gt=signal, sp_gt=spike, sg=-signal1, sp=spike1, timepoint=timepoint, scope=scope, hline=0.4)  
-
-print(precision)
-print(recall)
-print(F1)
-
-plt.savefig('result_pur.pdf')
 
 
 #%%
@@ -390,27 +412,7 @@ d = loadmat('Patch.fig', squeeze_me=True, struct_as_record=False)
 Mouse 0.947
 Fish2 0.976
 Fish1 0.892
-#%%
-width = 0.2  # the width of the bars
-m = [0.947, 0.976, 0.892]
-fig, ax = plt.subplots()
-x = 0
 
-rects2 = ax.bar(x - width/2, m[2], width/2, label='Fish1',color='r')
-rects3 = ax.bar(x , m[1], width/2, label='Fish2',color='gray')
-rects1 = ax.bar(x + width/2, m[0], width/2, label='Mouse',color='b')
-
-# Add some text for labels, title and custom x-axis tick labels, etc.
-ax.set_ylabel('Scores')
-ax.set_ylabel('F1 score')
-ax.set_ylim([0.40,0.95])
-ax.spines['right'].set_visible(False)
-ax.spines['top'].set_visible(False)
-#ax.set_xticks(x)
-plt.xticks([])
-#ax.set_xticklabels([x - width, x, x + width], ['Mouse','Fish2','Fish1'])
-ax.legend(loc=1)
-plt.savefig('F1_ephys.pdf')
 
 
 
