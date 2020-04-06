@@ -319,70 +319,7 @@ ax.spines['right'].set_visible(False)
 ax.spines['top'].set_visible(False)
 plt.tight_layout()
 plt.savefig('/home/nel/Code/VolPy/Paper/pic_paper/F1_alldata_new.pdf')
-#%%%%%%%%%%%
-# T vs frames
-"""
-10000 frames
-motion correction time:
-54.37724542617798
-memory map time:
-11.589507341384888
-init time:
-6.994962453842163
-spike pursuit time:
-70.4176857471466
 
-20000 frames
-motion correction time:
-110.28093028068542
-memory map time:
-23.277902603149414
-init time:
-7.705028057098389
-spike pursuit time:
-150.00337171554565
-
-36000 frames
-motion correction time:
-171.50250887870789
-memory map time:
-69.83776998519897
-init time:
-11.04919719696045
-spike pursuit time:
-300.5299062728882
-"""
-
-
-import matplotlib.pyplot as plt
-
-m = np.array([[54.3,31.7,42.4+10,75.3],
-              [114.5,9.4,86.2+10,171.3],
-              [118.0,30.3,83.0+10,320.5]])
-
-plt.figure(figsize=(4, 4))
-
-
-size = np.array([2.6, 5.2, 9.4])
-plt.title('Processing time allocation')
-plt.bar((size), (m[:,0]), width=0.5, bottom=0)
-plt.bar((size), (m[:,1]), width=0.5, bottom=(m[:,0]))
-plt.bar((size), (m[:,2]), width=0.5, bottom=(m[:,0] + m[:,1]))
-plt.bar((size), (m[:,3]), width=0.5, bottom=(m[:,0] + m[:,1] + m[:,2]))
-plt.legend(['motion corection', 'mem mapping', 'segmentation','SpikePursuit'],frameon=False)
-plt.xlabel('size (GB)')
-plt.ylabel('time (seconds)')
-
-#pl.plot((np.sort(size)), (10 ** np.sort(size)) / 31.45, '--k')
-#plt.xlim([3.6, 5.2])
-ax = plt.gca()
-ax.locator_params(nbins=7)
-ax.spines['right'].set_visible(False)
-ax.spines['top'].set_visible(False)
-#axx.set_yticklabels([str(int((ss) / 60))[:5] for ss in axx.get_yticks()])
-#axx.set_xticklabels([int(i) for i in size])
-plt.xticks(size, [str(int(i)) for i in size])
-plt.savefig('/home/nel/Code/VolPy/Paper/t&size.pdf')
 
 
 #%% T vs cpu
@@ -847,7 +784,7 @@ for i in ds_list:
        
 # %%
 dr = '/home/nel/Code/VolPy/Mask_RCNN/videos & imgs/neurons_mc'
-dz = '/home/nel/Code/VolPy/Paper/ZENODO' 
+dz = '/home/nel/Code/VolPy/Paper/ZENODO' W
 ds_list = sorted(os.listdir(dr)) 
 for i in ds_list[3:]:
     if 'Fish' in i:

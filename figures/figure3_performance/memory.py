@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-This file is used to measure computational performance of VolPy
+This file is used to measure computational performance of VolPy.
+Note that if testing with 1 CPU, make sure dview=None.
 @author: caichangjia
 """
 
-from memory_profiler import profile    
+from memory_profiler import profile
 
 def test_computational_performance(fnames, path_ROIs, n_processes):
     import os
@@ -43,8 +44,10 @@ def test_computational_performance(fnames, path_ROIs, n_processes):
     from caiman.summary_images import local_correlations_movie_offline
     from caiman.summary_images import mean_image
     from caiman.source_extraction.volpy.utils import quick_annotation
+    from multiprocessing import Pool
     
     time_start = time()
+    print('Start MOTION CORRECTION')
 
     # %%  Load demo movie and ROIs
     fnames = fnames
@@ -78,21 +81,9 @@ def test_computational_performance(fnames, path_ROIs, n_processes):
 
     opts = volparams(params_dict=opts_dict)
 
-# %% play the movie (optional)
-    # playing the movie using opencv. It requires loading the movie in memory.
-    # To close the video press q
-    display_images = False
-
-    if display_images:
-        m_orig = cm.load(fnames)
-        ds_ratio = 0.2
-        moviehandle = m_orig.resize(1, 1, ds_ratio)
-        moviehandle.play(q_max=99.5, fr=60, magnification=6)
-
 # %% start a cluster for parallel processing
-    c, dview, n_processes = cm.cluster.setup_cluster(
-        backend='local', n_processes=n_processes, single_thread=False)
-
+    dview = Pool(n_processes)
+    #dview = None
 # %%% MOTION CORRECTION
     # first we create a motion correction object with the specified parameters
     mc = MotionCorrect(fnames, dview=dview, **opts.get_group('motion'))
@@ -100,20 +91,13 @@ def test_computational_performance(fnames, path_ROIs, n_processes):
     mc.motion_correct(save_movie=True)
 
     time_mc = time() - time_start
-# %% compare with original movie
-    if display_images:
-        m_orig = cm.load(fnames)
-        m_rig = cm.load(mc.mmap_file)
-        ds_ratio = 0.2
-        moviehandle = cm.concatenate([m_orig.resize(1, 1, ds_ratio) - mc.min_mov * mc.nonneg_movie,
-                                      m_rig.resize(1, 1, ds_ratio)], axis=2)
-        moviehandle.play(fr=60, q_max=99.5, magnification=4)  # press q to exit
+    print(time_mc)
+    print('START MEMORY MAPPING')
         
     # %% restart cluster to clean up memory
-    cm.stop_server(dview=dview)
-    c, dview, n_processes = cm.cluster.setup_cluster(
-        backend='local', n_processes=n_processes, single_thread=False, maxtasksperchild=1)
-
+    dview.terminate()
+    dview = Pool(n_processes)
+    
 # %% MEMORY MAPPING
     border_to_0 = 0 if mc.border_nan == 'copy' else mc.border_to_0
     # you can include the boundaries of the FOV if you used the 'copy' option
@@ -121,12 +105,13 @@ def test_computational_performance(fnames, path_ROIs, n_processes):
     # the boundaries
     
     # memory map the file in order 'C'
-    fname_new = cm.save_memmap_join(mc.mmap_file, base_name='memmap_', order='C'
+    fname_new = cm.save_memmap_join(mc.mmap_file, base_name='memmap_',
                                add_to_mov=border_to_0, dview=dview, n_chunks=1000)  # exclude border
     
     time_mmap = time() - time_start - time_mc
+    print('Start Segmentation')
 # %% SEGMENTATION
-    # create summary images
+    # create summary images    
     img = mean_image(mc.mmap_file[0], window = 1000, dview=dview)
     img = (img-np.mean(img))/np.std(img)
     Cn = local_correlations_movie_offline(mc.mmap_file[0], fr=fr, window=1500, 
@@ -138,7 +123,7 @@ def test_computational_performance(fnames, path_ROIs, n_processes):
     methods_list = ['manual_annotation',        # manual annotation needs user to prepare annotated datasets same format as demo ROIs 
                     'quick_annotation',         # quick annotation annotates data with simple interface in python
                     'maskrcnn' ]                # maskrcnn is a convolutional network trained for finding neurons using summary images
-    method = methods_list[2]
+    method = methods_list[0]
     if method == 'manual_annotation':                
         with h5py.File(path_ROIs, 'r') as fl:
             ROIs = fl['mov'][()]  # load ROIs
@@ -170,19 +155,19 @@ def test_computational_performance(fnames, path_ROIs, n_processes):
         r = results[0]
         ROIs = r['masks'].transpose([2, 0, 1])
 
-        display_result = True
+        display_result = False
         if display_result:
             _, ax = plt.subplots(1,1, figsize=(16,16))
             visualize.display_instances(summary_image, r['rois'], r['masks'], r['class_ids'], 
                                     ['BG', 'neurons'], r['scores'], ax=ax,
                                     title="Predictions")
-            
+
     time_seg = time() - time_mmap - time_mc - time_start
+    print('Start SPIKE EXTRACTION')
 
 # %% restart cluster to clean up memory
-    cm.stop_server(dview=dview)
-    c, dview, n_processes = cm.cluster.setup_cluster(
-        backend='local', n_processes=n_processes, single_thread=False, maxtasksperchild=1)
+    dview.terminate()
+    dview = Pool(n_processes, maxtasksperchild=1)
 
 # %% parameters for trace denoising and spike extraction
     fnames = fname_new                            # change file
@@ -211,22 +196,126 @@ def test_computational_performance(fnames, path_ROIs, n_processes):
     vpy.fit(n_processes=n_processes, dview=dview)
     
     # %% STOP CLUSTER and clean up log files
-    cm.stop_server(dview=dview)
+    #dview.terminate()
     log_files = glob.glob('*_LOG_*')
     for log_file in log_files:
         os.remove(log_file)
         
     time_ext = time() - time_mmap - time_mc - time_start - time_seg
     
+    #%%
     print('file:'+fnames)
     print('number of processes'+str(n_processes))
     print(time_mc)
     print(time_mmap)
     print(time_seg)
     print(time_ext)
+    time_list = [time_mc, time_mmap, time_seg, time_ext]
+    
+    return time_list
+    
+    
 #%%
 if __name__ == '__main__':
-    fnames = '/home/nel/data/voltage_data/volpy_paper/memory/403106_3min_10000.hdf5'
-    path_ROIs = '/home/nel/data/voltage_data/volpy_paper/memory/ROI.npz'
-    n_processes = 15
-    test_computational_performance(fnames=fnames, path_ROIs=path_ROIs, n_processes=n_processes)
+    import numpy as np
+    from memory_profiler import memory_usage
+    time_all = []
+    results = {}
+    fnames = '/home/nel/data/voltage_data/volpy_paper/memory/403106_3min_40000.hdf5'
+    #fnames = '/home/nel/data/voltage_data/volpy_paper/memory/403106_3min_36000.hdf5'
+    path_ROIs = '/home/nel/data/voltage_data/volpy_paper/memory/ROIs.hdf5'
+    """
+    n_processes = 8
+        fnames_list = ['/home/nel/data/voltage_data/volpy_paper/memory/403106_3min_10000.hdf5',
+                   '/home/nel/data/voltage_data/volpy_paper/memory/403106_3min_20000.hdf5',
+                   '/home/nel/data/voltage_data/volpy_paper/memory/403106_3min_40000.hdf5']
+    
+    for fnames in fnames_list:
+        time_list = test_computational_performance(fnames=fnames, path_ROIs=path_ROIs, n_processes=n_processes)
+        time_all.append(time_list)
+    np.savez('/home/nel/Code/NEL_LAB/volpy/figures/figure3_performance/time_frames.npz', time_all)
+    """
+    n_procs=[1] 
+    for n_proc in n_procs:
+        results['%dprocess' % n_proc] = [memory_usage(
+            proc=lambda: test_computational_performance(
+                    fnames=fnames, path_ROIs=path_ROIs, n_processes=n_proc), 
+                    include_children=True, retval=True)]
+
+    np.savez('/home/nel/Code/NEL_LAB/volpy/figures/figure3_performance/time_memory_proc_test{}.npz'.format(n_procs[0]), results)
+
+#%% Visualization
+# T vs frames
+
+import numpy as np
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+import matplotlib.pyplot as plt
+
+m = np.load('/home/nel/Code/NEL_LAB/volpy/figures/figure3_performance/time_frames.npz',
+             allow_pickle=True)['arr_0']
+
+plt.figure(figsize=(4, 4))
+size = np.array([1, 2, 4])
+plt.title('Processing time allocation')
+plt.bar((size), (m[:,0]), width=0.5, bottom=0)
+plt.bar((size), (m[:,1]), width=0.5, bottom=(m[:,0]))
+plt.bar((size), (m[:,2]), width=0.5, bottom=(m[:,0] + m[:,1]))
+plt.bar((size), (m[:,3]), width=0.5, bottom=(m[:,0] + m[:,1] + m[:,2]))
+plt.legend(['motion corection', 'mem mapping', 'segmentation','spike extraction'],frameon=False)
+plt.xlabel('frames (10^4)')
+plt.ylabel('time (seconds)')
+
+ax = plt.gca()
+ax.locator_params(nbins=7)
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+
+plt.xticks(size, [str(int(i)) for i in size])
+plt.tight_layout()
+plt.savefig('/home/nel/data/voltage_data/volpy_paper/memory/time&size.pdf', bbox_inches='tight')    
+    
+#%% T vs cpu
+memory = []
+time = []
+n_procs = [1, 2, 4, 8]
+for n_proc in n_procs:
+    mm = np.load('/home/nel/Code/NEL_LAB/volpy/figures/figure3_performance/time_memory_proc{}.npz'.format(n_proc),
+                allow_pickle=True)['arr_0'].item()
+    memory.append(max(mm['%dprocess'% n_proc][0][0]))
+    time.append(mm['%dprocess'% n_proc][0][1])
+    
+time=np.array(time)
+    
+plt.figure(figsize=(4, 4))
+plt.title('parallelization speed')
+plt.bar((n_procs), (time[:,0]), width=0.5, bottom=0)
+plt.bar((n_procs), (time[:,1]), width=0.5, bottom=(time[:,0]))
+plt.bar((n_procs), (time[:,2]), width=0.5, bottom=(time[:,0] + time[:,1]))
+plt.bar((n_procs), (time[:,3]), width=0.5, bottom=(time[:,0] + time[:,1] + time[:,2]))
+plt.legend(['motion corection', 'memory mapping', 'segmentation','spike extraction'],frameon=False)
+plt.xlabel('number of processors')
+plt.ylabel('time (seconds)')
+
+ax = plt.gca()
+ax.locator_params(nbins=7)
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+plt.xticks(n_procs, [str(n_procs[i]) for i in range(len(n_procs))])
+plt.savefig('/home/nel/data/voltage_data/volpy_paper/memory/time_cpu_{}.pdf'.format(max(n_procs)), bbox_inches='tight')
+
+
+#%% memory vs cpu
+mem = [round(m/1024, 2) for m in memory]
+plt.figure(figsize=(4, 4))
+plt.title('peak memory')
+plt.scatter(n_procs, mem, color='orange',linewidth=5)
+plt.xlabel('number of processors')
+plt.ylabel('peak memory (GB)')
+
+ax = plt.gca()
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+plt.xticks(n_procs, [str(n_procs[i]) for i in range(len(n_procs))])
+plt.savefig('/home/nel/data/voltage_data/volpy_paper/memory/memory_cpu_{}.pdf'.format(max(n_procs)), bbox_inches='tight')

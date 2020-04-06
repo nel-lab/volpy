@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Feb 13 14:38:44 2020
-
-@author: Changjia
+This file produces trace and spikes given volpy result
+@author: caichangjia
 """
-
 import caiman as cm
 import numpy as np
 from scipy.ndimage.measurements import center_of_mass
@@ -18,23 +16,21 @@ from skimage import measure
 colorsets = plt.cm.tab10(np.linspace(0,1,10))
 colorsets = colorsets[[0,1,2,3,4,5,6,8,9],:]
 
-#%%
-del1 = np.std(np.array(vpy.estimates['num_spikes'])[:,-4:], axis=1)
-del2 = np.array(output['passedLocalityTest'])
-del3 = np.array(vpy.estimates['low_spk'])
-select = np.multiply(np.multiply((del1<200), (del2>-1)), (del3<2))
-
-#%%
-delarray = np.array([11,16,25,26])
-select = np.ones(ROIs_mrcnn.shape[0]).astype(np.int)
+#%% Delete based on measures and manually
+estimates = vpy.estimates.copy()
+del1 = np.std(np.array(estimates['num_spikes'])[:,-4:], axis=1)
+del2 = np.array(estimates['locality'])
+del3 = np.array(estimates['low_spikes'])
+select = np.multiply(np.multiply((del1<200), (del2>0)), (del3<2))
+delarray = np.array([12, 28])
 select[delarray] = 0
 select = select>0
 
 
 #%%
-A = ROIs_mrcnn.copy()[select]
-C = np.stack(vpy.estimates['trace'], axis=0).copy()[select]
-spike = [vpy.estimates['spikeTimes'][i] for i in np.where(select>0)[0]]
+A = ROIs.copy()[select]
+C = np.stack(estimates['trace_processed'], axis=0).copy()[select]
+spike = [estimates['spikes'][i] for i in np.where(select>0)[0]]
 
 #%% Seperate components
 def neuron_number(A, N, n, n_group):    
@@ -50,10 +46,10 @@ n = N
 n_group = np.int(np.ceil(N/n))
 mat = neuron_number(A, N, n, n_group)
 
-#%%
+#%% visualize spatial footprint
 Cn = summary_image[:,:,2]  
 A = A.astype(np.float64)
-save_path= '/home/nel/Code/VolPy/Paper/Figure2/'
+root_dir = '/home/nel/data/voltage_data/volpy_paper/figure1'
 
 def plot_neuron_contour(A, N, n, n_group, Cn, save_path):
     number=0
@@ -82,15 +78,15 @@ def plot_neuron_contour(A, N, n, n_group, Cn, save_path):
                 plt.plot(contours[:, 1], contours[:, 0], linewidth=1, color=colorsets[np.mod(number,9)])
                 plt.text(cm1[index, 1]+0, cm1[index, 0]-0, str(number), color=colors)
                 number=number+1 
-        plt.savefig(save_path+'neuron_contour{}-{}'.format(number1,number-1)+'.pdf')
+        plt.savefig(os.path.join(root_dir, 'neuron_contour{}-{}.pdf'.format(number1,number-1)))
         number1=number
         
-plot_neuron_contour(A, N, n, n_group, Cn, save_path)
+plot_neuron_contour(A, N, n, n_group, Cn, root_dir)
 
-#%%
+#%% visualize corresponding traces
 CZ = C[:,:20000]
 CZ = (CZ-CZ.mean(axis=1)[:,np.newaxis])/CZ.std(axis=1)[:,np.newaxis]
-
+#CZ = CZ/CZ.max(axis=1)[:,np.newaxis]
 
 def plot_neuron_signal(A, N, n, n_group, Cn, save_path):     
     number=0
@@ -101,22 +97,18 @@ def plot_neuron_signal(A, N, n, n_group, Cn, save_path):
         for j in range(n):
             if j==0:
                 ax[j].set_title('Signals')
-            #Y_r = cnm2.estimates.YrA + cnm2.estimates.C
             if mat[i,j]>-1:
-                #Y_r = cnm2.estimates.F_dff[select,:]
                 index = mat[i,j]
                 T = C.shape[1]
-                ax[j].plot(np.arange(20000), -CZ[index], 'c', linewidth=1, color=colorsets[np.mod(number,9)])
-                ax[j].autoscale(tight=True)
+                ax[j].plot(np.arange(20000), CZ[index], 'c', linewidth=0.1, color=colorsets[np.mod(number,9)])
                 ax[j].scatter(spike[index],
-                 np.max(-CZ[index]+0.5) * np.ones(spike[index].shape),
-                 color=colorsets[np.mod(number,9)], marker='.',linewidth=0.01)
-                #ax[j].plot(np.arange(T), cnm2.estimates.S[index, :][:], 'r', linewidth=2)
-                ax[j].text(-30, 0, f'{number}', horizontalalignment='center',
+                 np.max(CZ[index]+0.1) * np.ones(spike[index].shape),
+                 color=colorsets[np.mod(number,9)], marker='o',s=0.1)
+                ax[j].autoscale(tight=True)
+                ax[j].text(-500, 0, f'{number}', horizontalalignment='center',
                      verticalalignment='center')
-                ax[j].set_ylim([(-CZ).min(),(-CZ).max()])
+                ax[j].set_ylim([CZ.min(), CZ.max()+1])
                 if j==0:
-                    #ax[j].legend(labels=['Filtered raw data', 'Inferred trace'], frameon=False)
                     ax[j].text(-30, 3000, 'neuron', horizontalalignment='center', 
                       verticalalignment='center')
                 if j<length-1:
@@ -129,10 +121,10 @@ def plot_neuron_signal(A, N, n, n_group, Cn, save_path):
                     ax[j].set_xlabel('Frames')
                 number = number + 1
         plt.tight_layout()
-        plt.savefig(save_path+'neuron_signal{}-{}'.format(number1,number-1)+'.pdf')
+        plt.savefig(os.path.join(root_dir, 'neuron_signal{}-{}.pdf'.format(number1,number-1)))
         number1=number    
         
-plot_neuron_signal(A, N, n, n_group, Cn, save_path)
+plot_neuron_signal(A, N, n, n_group, Cn, root_dir)
 
 
 
