@@ -851,7 +851,7 @@ recons_mv = cm.movie(np.array(recons_mv),fr=400)
 recons_mv = recons_mv/recons_mv.max()
 m_all = cm.concatenate((m_rig,m_rig_bl,recons_mv),axis=2)
 
-#%%  
+#%% VolPy caiman estimates
 plt.figure()
 plt.imshow(ROIs_mrcnn[n])
 plt.imshow(mv[0],alpha=0.5)
@@ -864,7 +864,35 @@ plt.figure()
 plt.plot(vpy.estimates['templates'][n])
 
 plt.figure()
-plt.plot(vpy.estimates['recons_signal'][n][:2000])     
+plt.plot(vpy.estimates['recons_signal'][n][:2000])   
+
+from caiman.source_extraction.cnmf.estimates import Estimates
+import scipy
+estimates = vpy.estimates.copy()
+A = np.array(estimates['spatial_filter']).transpose([1,2,0]).reshape((-1, len(estimates['spatial_filter'])),order='F')
+A = A / A.max(axis=0)
+b = np.zeros((A.shape[0],2))
+A = scipy.sparse.csc_matrix(A)
+b = scipy.sparse.csc_matrix(b)
+C = np.array(estimates['t_rec'])
+f = np.zeros((2, C.shape[1]))
+R = np.array(estimates['t']) - C
+est = Estimates(A=A, C=C, b=b, f=f, R=R, dims=(100,100))
+est.YrA = R
+#est.plot_contours(img=summary_image[:,:,2])
+# now load the file
+Yr, dims, T = cm.load_memmap(fname_new)
+images = np.reshape(Yr.T, [T] + list(dims), order='F')
+est.dview = dview
+#est.view_components(img=summary_image[:,:,2])
+est.play_movie(imgs=images, magnification=4)
+ 
+
+est = np.load('/home/nel/data/voltage_data/volpy_paper/reconstructed/estimates.npz',allow_pickle=True)['arr_0'].item()
+fnames = ['/home/nel/data/voltage_data/volpy_paper/memory/403106_3min_10000._rig__d1_512_d2_128_d3_1_order_F_frames_10000_.mmap']
+
+
+  
         
        
        
