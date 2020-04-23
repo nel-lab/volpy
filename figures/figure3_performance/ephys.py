@@ -3,6 +3,13 @@
 File for processing simultaneous electrophysiology with voltage imaging data
 @author: caichangjia
 """
+#%%
+import numpy as np
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+import matplotlib.pyplot as plt
+import scipy.signal
 
 #%% Some functions
 def compare_with_ephys_match(sg_gt, sp_gt, sg, sp, timepoint, max_dist=None, scope=None, hline=None):
@@ -81,11 +88,6 @@ def find_matches(D):
     return index_gt, index_method
 
 #%% Johannes's data
-import numpy as np
-import matplotlib
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-import matplotlib.pyplot as plt
 #root_dir = '/home/nel/data/voltage_data/simul_electr/johannes/09282017Fish1-1'
 root_dir = '/home/nel/data/voltage_data/simul_electr/johannes/10052017Fish2-2'
 #root_dir = '/home/nel/data/voltage_data/simul_electr/johannes/09212017Fish1-1'
@@ -98,7 +100,6 @@ plt.plot(ephys);plt.hlines(0.5, 0, len(ephys), linestyles='dashed', color='gray'
 plt.plot(frame_timing,(-imaging_signal+1)*20)
 
 #%% Pre-processing
-import scipy.signal
 n = 0
 hline = 0.5
 estimates = np.load(os.path.join(root_dir, 'estimates.npz'), allow_pickle=True)['arr_0'].item()
@@ -137,14 +138,14 @@ plt.savefig(os.path.join(root_dir, 'spatial_new.pdf'))
 
 #%% Kaspar's data 
 root_dir = '/home/nel/data/voltage_data/simul_electr/kaspar/Ground truth data/Session1'
-
+from scipy import io
 n = 0
 fr = 20000
 scope = [2000000,3000000]
 #scope = [2500000,3500000]
 fname = '/home/nel/Dropbox_old/Kaspar-Andrea/Ground truth data/Ephys_data_session6_s2.mat'
 fname = '/home/nel/data/voltage_data/simul_electr/kaspar/Ground truth data/Ephys_data_session1.mat'
-f = scipy.io.loadmat(fname)
+f = io.loadmat(fname)
 frames = np.where(np.logical_and(f['read_starts'][0]>scope[0], f['read_starts'][0]<scope[1]))[0]
 timepoint = np.array([f['read_starts'][0][frames[i]]-scope[0] for i in range(frames.shape[0])])
 
@@ -190,15 +191,10 @@ ax.legend(loc=1)
 plt.savefig(os.path.join('/home/nel/data/voltage_data/simul_electr', 'F1_ephys.pdf'))
 
 
-
-
-
-
+#%% Subthreshold event of eletrophysiology and voltage
+plt.figure(); plt.plot(timepoint, vpy.estimates['t'][1], label='t'); plt.plot(timepoint, vpy.estimates['t_sub'][1]+30, label='t_sub'); plt.plot(ephys, label='ephys');plt.legend()
+plt.savefig('/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Backup/Sub_10Hz.pdf')
 #%% Backup
-
-
-
-
 
 #%% Others
 import numpy as np
