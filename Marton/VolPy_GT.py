@@ -13,8 +13,13 @@ from scipy.optimize import linear_sum_assignment
 from scipy.signal import find_peaks
 
 movie_dir = '/home/nel/data/voltage_data/Marton/454597/Cell_0/40x_patch1/'
-movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_3/40x_1xtube_10A2'
+#movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_3/40x_1xtube_10A2'
 #movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_3/40x_1xtube_10A3'
+#movie_dir = '/home/nel/data/voltage_data/Marton/462149/Cell_1/40x_1xtube_10A1'
+#movie_dir =  '/home/nel/data/voltage_data/Marton/462149/Cell_1/40x_1xtube_10A2'
+#movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A5'
+#movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A6'
+#movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A7'
 idx = 0
 
 #%% import ephys data
@@ -48,7 +53,6 @@ for time,response,stimulus in zip(sweep_time,sweep_response,sweep_stimulus):
     ax_stim.plot(time,stimulus,'k-')
 if dff is not None:
     ax_ophys = fig.add_axes([0,1,2,.8])
-
     ax_ophys.plot(frame_times,dff,'g-')
     ax_ophys.autoscale(tight = True)
     #ax_ophys.invert_yaxis()
@@ -72,11 +76,12 @@ v_sp = v_t[vpy.estimates['spikes'][idx]]
 
 for i in range(len(sweep_time) - 1):
     v_sp = np.delete(v_sp, np.where([np.logical_and(v_sp>sweep_time[i][-1], v_sp<sweep_time[i+1][0])])[1])
+v_sp = np.delete(v_sp, np.where([v_sp>sweep_time[i+1][-1]])[1])
 
 plt.plot(v_t, v_sg, label='ephys', color='blue')
 plt.plot(v_sp, np.max(v_sg)*1.1*np.ones(v_sp.shape),color='b', marker='.', ms=2, fillstyle='full', linestyle='none')
 
-#%%
+#%% load ephys data
 e_sg =  np.array(sweep_response).reshape(-1, order='C')
 e_t = np.array(sweep_time).reshape(-1, order='C')
 e_sg = np.delete(e_sg, np.where([np.logical_or(e_t<v_t[0], e_t>v_t[-1])])[1])
@@ -169,9 +174,24 @@ def spike_comparison(i, e_sg, e_sp, e_t, v_sg, v_sp, v_t, scope, max_dist, save=
     TP = len(index_gt)
     FP = len(v_sp) - TP
     FN = len(e_sp) - TP
-    precision = TP / (TP + FP)
-    recall = TP / (TP + FN)
-    F1 = 2 * (precision * recall) / (precision + recall) 
+    try:    
+        precision = TP / (TP + FP)
+    except ZeroDivisionError:
+        if v_sp == 0:
+            precision = 1
+        else:    
+            precision = 0
+
+    try:    
+        recall = TP / (TP + FN)
+    except ZeroDivisionError:
+        recall = 1
+
+    try:
+        F1 = 2 * (precision * recall) / (precision + recall) 
+    except ZeroDivisionError:
+        F1 = 0
+
     print('precision:',precision)
     print('recall:',recall)
     print('F1:',F1)      
@@ -204,13 +224,8 @@ def sub_correlation(i, v_t, e_sub, v_sub, scope, save=False):
         plt.plot(v_t, v_sub)   
         plt.savefig(f'{volpy_path}/spike_sweep{i}_subthreshold.pdf')
     return corr
-    
-#%% compare spikes
-volpy_path = os.path.join(movie_dir, 'volpy')
-if not os.path.isdir(volpy_path):
-   os.makedirs(volpy_path)
 
-def metric(sweep_time, e_sg, e_sp, e_t, v_sg, v_sp, v_t):
+def metric(sweep_time, e_sg, e_sp, e_t, e_sub, v_sg, v_sp, v_t, v_sub, save=False):
     precision = []
     recall = []
     F1 = []
@@ -218,7 +233,7 @@ def metric(sweep_time, e_sg, e_sp, e_t, v_sg, v_sp, v_t):
     mean_time = []
     e_match = []
     v_match = []
-    save=False
+    
     for i in range(len(sweep_time)):
         print(f'sweep{i}')
         if i == 0:
@@ -243,39 +258,50 @@ def metric(sweep_time, e_sg, e_sp, e_t, v_sg, v_sp, v_t):
     v_match = np.concatenate(v_match)
 
     return precision, recall, F1, sub_corr, e_match, v_match, mean_time
-
+    
+#%% save
+volpy_path = os.path.join(movie_dir, 'volpy')
+if not os.path.isdir(volpy_path):
+   os.makedirs(volpy_path)
+temp = movie_dir.split('/')
+np.savez(f'{volpy_path}/{temp[-3]}_{temp[-2]}_{temp[-1]}_output_{vpy.params.volspike["threshold_method"]}.npz', sweep_time=sweep_time, e_sg=e_sg, v_sg=v_sg, 
+         e_t=e_t, v_t=v_t, e_sp=e_sp, v_sp=v_sp, e_sub=e_sub, v_sub=v_sub)
 
 #%% firing rate
 file_list = ['/home/nel/data/voltage_data/Marton/456462/Cell_3/40x_1xtube_10A2/volpy/output_simple.npz',
              '/home/nel/data/voltage_data/Marton/456462/Cell_3/40x_1xtube_10A3/volpy/output_simple.npz']
+file_list = [f'/home/nel/data/voltage_data/Marton/462149/Cell_1/40x_1xtube_10A1/volpy/output_{vpy.params.volspike["threshold_method"]}.npz', 
+                                                                                              f'/home/nel/data/voltage_data/Marton/462149/Cell_1/40x_1xtube_10A2/volpy/output_{vpy.params.volspike["threshold_method"]}.npz']
+file_list = ['/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A5/volpy/output_simple.npz',
+             '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A6/volpy/output_simple.npz',
+             '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A7/volpy/output_simple.npz']
+
+file_list = ['/home/nel/data/voltage_data/Marton/454597/Cell_0/40x_patch1/volpy/Cell_0_40x_patch1__output_simple.npz']
+
+file_list = ['/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A5/volpy/456462_Cell_5_40x_1xtube_10A5_output_simple.npz',
+             '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A6/volpy/456462_Cell_5_40x_1xtube_10A6_output_simple.npz',
+             '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A7/volpy/456462_Cell_5_40x_1xtube_10A7_output_simple.npz']
 fig = plt.figure(figsize=(12,12))
 fig.suptitle(f'subject_id:{movie_dir.split("/")[-3]}  Cell number:{movie_dir.split("/")[-2]}')
 
-pr= [0,0]
-re = [0,0]
-F = [0,0]
-sub = [0,0]
+pr= []
+re = []
+F = []
+sub = []
 for file in file_list:
     dict1 = np.load(file, allow_pickle=True)
-    sweep_time = dict1['sweep_time']
-    e_sg = dict1['e_sg']    
-    v_sg = dict1['v_sg']
-    e_sp = dict1['e_sp'] 
-    v_sp = dict1['v_sp']
-    e_t = dict1['e_t']
-    v_t =  dict1['v_t']
-    e_sub = dict1['e_sub']
-    v_sub = dict1['v_sub']
-
-    precision, recall, F1, sub_corr, e_match, v_match, mean_time = metric(sweep_time, e_sg, e_sp, e_t, v_sg, v_sp, v_t)
-    pr.append(np.array(precision).mean())
-    re.append(np.array(recall).mean())
-    F.append(np.array(F1).mean())
-    sub.append(np.array(sub_corr).mean())
+    precision, recall, F1, sub_corr, e_match, v_match, mean_time = metric(dict1['sweep_time'], dict1['e_sg'], 
+                                                                          dict1['e_sp'], dict1['e_t'], dict1['e_sub']
+                                                                          dict1['v_sg'], dict1['v_sp'], 
+                                                                          dict1['v_t'], dict1['v_sub'], save=False)
+    pr.append(np.array(precision).mean().round(2))
+    re.append(np.array(recall).mean().round(2))
+    F.append(np.array(F1).mean().round(2))
+    sub.append(np.array(sub_corr).mean().round(2))
     ax1 = fig.add_axes([0.05, 0.8, 0.9, 0.15])
     xlimits = [frame_times[0],frame_times[-1]]
-    e_fr = np.unique(np.floor(e_sp), return_counts=True)
-    v_fr = np.unique(np.floor(v_sp), return_counts=True)
+    e_fr = np.unique(np.floor(dict1['e_sp']), return_counts=True)
+    v_fr = np.unique(np.floor(dict1['v_sp']), return_counts=True)
     ax1.plot(e_fr[0], e_fr[1], color='black')
     ax1.plot(v_fr[0], v_fr[1], color='g')
     ax1.legend(['ephys','voltage'])
@@ -283,11 +309,11 @@ for file in file_list:
     #ax1.set_xticklabels([])
     
     ax2 = fig.add_axes([0.05, 0.6, 0.9, 0.15])
-    ax2.vlines(list(set(v_sp)-set(v_match)), 2.75,3.25, color='red')
-    ax2.vlines(v_sp, 1.75,2.25, color='green')
-    ax2.vlines(e_sp, 0.75,1.25, color='black')
-    ax2.vlines(list(set(e_sp)-set(e_match)), -0.25,0.25, color='red')
-    plt.yticks(np.arange(4), ['False Positive', 'Voltage', 'Ephys', 'False Negative'])
+    ax2.vlines(list(set(dict1['v_sp'])-set(v_match)), 2.75,3.25, color='red')
+    ax2.vlines(dict1['v_sp'], 1.75,2.25, color='green')
+    ax2.vlines(dict1['e_sp'], 0.75,1.25, color='black')
+    ax2.vlines(list(set(dict1['e_sp'])-set(e_match)), -0.25,0.25, color='red')
+    plt.yticks(np.arange(4), ['False Negative', 'Ephys', 'Voltage', 'False Positive'])
     #ax2.set_xticklabels([])
     
     ax3 = fig.add_axes([0.05, 0.2, 0.9, 0.35])
@@ -297,19 +323,16 @@ for file in file_list:
     
     #ax3.set_xticklabels([])
     
-    ax4 = fig.add_axes([0.05, 0.0, 0.9, 0.15])
-    ax4.plot(mean_time, sub_corr, c='blue')
+    ax4 = fig.add_axes([0.05, 0, 0.9, 0.15])
+    ax4.plot(mean_time, sub_corr, 'o-', c='blue')
     #plt.savefig(f'{volpy_path}/metric_{vpy.params.volspike["threshold_method"]}.pdf', bbox_inches='tight')
-ax3.legend([f'precision:{round(pr[0],2)},{round(pr[1],2)} ',
-                             f'recall: {round(re[0],2)},{round(re[1],2)}',
-                             f'F1: {round(F[0],2)}, {round(F[0],2)}' ])
-ax4.legend(f'corr:{round(sub[0],2)}, {round(sub[1],2)}')
-    
+ax3.legend([f'precision:{pr}', f'recall: {re}', f'F1: {F}'])
+ax4.legend([f'corr:{sub}'])
+#plt.savefig(f'{volpy_path}/metric_all_{vpy.params.volspike["threshold_method"]}.pdf', bbox_inches='tight')
 #%%
 metric = {'precision':precision, 'recall':recall, 'F1':F1, 'sub_corr':sub_corr}
 
-np.savez(f'{volpy_path}/output_{vpy.params.volspike["threshold_method"]}.npz', sweep_time=sweep_time, e_sg=e_sg, v_sg=v_sg, 
-         e_t=e_t, v_t=v_t, e_sp=e_sp, v_sp=v_sp, e_sub=e_sub, v_sub=v_sub, metric=metric)
+
 
 #%%
 dict1 = {}
@@ -343,7 +366,7 @@ for key in dict1.keys():
     
 #%%
 from caiman.source_extraction.volpy.utils import view_components
-utils.view_components(vpy.estimates, img_corr, idx, frame_times=frame_times, gt_times=e_sp)
+utils.view_components(vpy.estimates, img_corr, [idx], frame_times=frame_times, gt_times=e_sp)
 
 
 #%%
