@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Sep 20 10:33:04 2019
-
 @author: Changjia
 This file produce figures for voltage imaging paper
 """
@@ -26,291 +25,146 @@ try:
         get_ipython().magic('autoreload 2')
 except NameError:
     pass
-#%% Mask and comparison to the ground truth
-use_maskrcnn = True
-if use_maskrcnn:
-    import sys
-    from caiman.paths import caiman_datadir
-    model_dir = caiman_datadir()+'/model'
-    sys.path.append(model_dir) 
-    import mrcnn.model as modellib
-    from mrcnn import visualize
-    from mrcnn import neurons
-    import tensorflow as tf
-    
-    
-#%%
-dr = '/home/nel/Code/VolPy/Mask_RCNN/datasets/neurons/val/'
-ds_list = sorted(os.listdir(dr))
-test_dr = '/home/nel/Code/VolPy/Mask_RCNN/datasets/neurons/val/'
-test_ds_list = sorted(os.listdir(test_dr))
-test_set = [i[:-4] for i in test_ds_list if 'mask' not in i]    
-    
-config = neurons.NeuronsConfig()
-class InferenceConfig(config.__class__):
-    # Run detection on one image at a time
-    GPU_COUNT = 1
-    IMAGES_PER_GPU = 1
-    DETECTION_MIN_CONFIDENCE = 0.33
-    IMAGE_RESIZE_MODE = "pad64"
-    IMAGE_MAX_DIM=512
-    CLASS_THRESHOLD = 0.3
-    RPN_NMS_THRESHOLD = 0.7
-    DETECTION_NMS_THRESHOLD = 0.3
-config = InferenceConfig()
-config.display()
 
-DEVICE = "/cpu:0"  # /cpu:0 or /gpu:0
-with tf.device(DEVICE):
-    model = modellib.MaskRCNN(mode="inference", model_dir=model_dir,
-                              config=config)
-#weights_path = model_dir + '/mrcnn/mask_rcnn_neurons_0200.h5'
-#weights_path = '/home/nel/Code/VolPy/Mask_RCNN/logs/neurons20190918T2052/mask_rcnn_neurons_0200.h5'
-#weights_path = '/home/nel/Code/VolPy/Mask_RCNN/logs/neurons20191002T1113/mask_rcnn_neurons_0090.h5'
-#weights_path = '/home/nel/Code/VolPy/Mask_RCNN/logs/neurons20191002T1337/mask_rcnn_neurons_0050.h5'
-#weights_path = '/home/nel/Code/VolPy/Mask_RCNN/logs/neurons20191002T1337/mask_rcnn_neurons_0050.h5'
-#weights_path = '/home/nel/Code/VolPy/Mask_RCNN/logs/neurons20191003T1509/mask_rcnn_neurons_0050.h5'
-#weights_path = '/home/nel/Code/VolPy/Mask_RCNN/logs/neurons20191006T2333/mask_rcnn_neurons_0050.h5'
-weights_path = '/home/nel/Code/VolPy/Mask_RCNN/logs/neurons20191014T1050/mask_rcnn_neurons_0080.h5'
+#%% Training only on L1 datasets
+files = sorted(['/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/voltage_v1.2_L1_1_train.npy', '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/voltage_v1.2_L1_1_val.npy', '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/voltage_v1.2_L1_2_train.npy', '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/voltage_v1.2_L1_2_val.npy', '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/voltage_v1.2_L1_4_train.npy', '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/voltage_v1.2_L1_4_val.npy', '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/voltage_v1.2_L1_6_train.npy', '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/voltage_v1.2_L1_6_val.npy'])
+files = sorted(['/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/TEG/voltage_v1.2_TEG_1_train.npy', '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/TEG/voltage_v1.2_TEG_1_val.npy', '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/TEG/voltage_v1.2_TEG_2_train.npy', '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/TEG/voltage_v1.2_TEG_2_val.npy'])
+F1 = []
+result = {}
 
+for mode in ['train', 'val']:
+    for file in files:
+        if mode in file:
+            data = np.load(file, allow_pickle=True).item()
+            li = []
+            for keys, values in data.items():
+                li.append(values['f1_score'])
+            F1.append(np.array(li).mean())
+    print(F1)
+    result[mode] = F1
+    F1 = [] 
 
-model.load_weights(weights_path, by_name=True)
-
-NEURONS_DIR = '/home/nel/Code/VolPy/Mask_RCNN/datasets/neurons/'
-dataset = neurons.NeuronsDataset()
-dataset.load_neurons(NEURONS_DIR, "train")
-# Must call before using the dataset
-dataset.prepare()
-
-performance=[]
-image_id = 2
-for image_id in dataset.image_ids:
-    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-        modellib.load_image_gt(dataset, config, image_id, use_mini_mask=False)
-    info = dataset.image_info[image_id]
-    print("image ID: {}.{} ({}) {}".format(info["source"], info["id"], image_id, 
-                                           dataset.image_reference(image_id)))
-    
-    # Run object detection
-    
-    results = model.detect([image], verbose=1)
-    
-    # Display results
-    _, ax = plt.subplots(1,1, figsize=(16,16))
-    r = results[0]
-    display_result = True
-    if display_result:  
-        visualize.display_instances(image, r['rois'], r['masks'], r['class_ids'], 
-                                    dataset.class_names, r['scores'], ax=ax,
-                                    title="Predictions")
-    #plt.savefig('/home/nel/Code/VolPy/Paper/' +dataset.image_info[image_id]['id'][:-4]+'_mrcnn_result.pdf')
-    plt.close()
-    
-    mask_pr = r['masks'].copy().transpose([2,0,1])*(1.)
-    mask_gt = gt_mask.copy().transpose([2,0,1])*(1.)
-    
-    tp_gt, tp_comp, fn_gt, fp_comp, performance_cons_off = nf_match_neurons_in_binary_masks(
-            mask_gt, mask_pr, thresh_cost=0.7, min_dist=10, print_assignment=True,
-            plot_results=True, Cn=image[:,:,0], labels=['GT', 'MRCNN'])
-    #plt.savefig('/home/nel/Code/VolPy/Paper/' +dataset.image_info[image_id]['id'][:-4]+'_compare.pdf')
-    plt.close()
-    performance.append(performance_cons_off)    
-
-#%% F1 score
-train = np.array([[0.8514, 0.8641, 0.8724],
-                  [0.8038, 0.7263, 0.8253],
-                  [0.7089, 0.5509, 0.6815]])
-val = np.array([[0.8853, 0.8223, 0.8419],
-                [0.7647, 0.7536, 0.7912],
-                [0.4667, 0.4742, 0.3533]])
-
-train = np.array([[0.8180, 0.8409, 0.8436],
-              [0.7689, 0.6973, 0.7437],
-              [0.7089, 0.5342, 0.6815]])
-val = np.array([[0.8432, 0.8094, 0.8140],
-                [0.7647, 0.6377, 0.7253],
-                [0.4667, 0.4742, 0.3533]])
-
-    
-l = [performance[i]['f1_score'] for i in range(len(performance))]
-
-nn = [performance[i]['precision'] for i in range(len(performance))]
-
-mm = [performance[i]['recall'] for i in range(len(performance))]
-
-
-#%% F1 score
-fig = plt.figure()
-plt.title('F1 score')
-ax = fig.add_subplot(111)
-#bar_data = [performance[i]['f1_score'] for i in range(len(performance))]
-#bar_data = [(bar_data[1]+bar_data[2])/2,bar_data[0],(bar_data[3]+bar_data[4]+bar_data[5])/3]
-ax.bar(['Kaspar','Johannes','Adam'],bar_data,width=0.4,color=[[1,0,0],[0,0,1],[.5,.5,.5]])
-#ax.spines['bottom'].set_visible(False)
-plt.savefig('/home/nel/Code/VolPy/Paper/F1_train.pdf')
-
-test: [0.8295668549905838, 0.6071428571428571, 0.5213182692184444]
-train:[0.83962, 0.8375, 0.6161]
-m = np.array([[0.83962   , 0.8375    , 0.6161    ],
-       [0.82956685, 0.60714286, 0.52131827]])
-
-labels = ['train', 'test']
-x = np.arange(len(labels))/2  # the label locations
-width = 0.2  # the width of the bars
-
-fig, ax = plt.subplots()
-rects1 = ax.bar(x - width/2, m[:,0], width/2, label='Kaspar')
-rects2 = ax.bar(x, m[:,1], width/2, label='Johannes')
-rects3 = ax.bar(x + width/2, m[:,2], width/2, label='Adam')
+plt.figure()
+ax = plt.gca()
+width = 0.35
+#labels = ['1', '2', '4', '6']
+labels = ['1', '2']
+x = np.arange(len(labels))
+rects1 = ax.bar(x - width/2, result['train'], width, label='train')
+rects2 = ax.bar(x + width/2, result['val'], width, label='val')
 
 # Add some text for labels, title and custom x-axis tick labels, etc.
-ax.set_ylabel('Scores')
-ax.set_ylabel('F1 score')
-ax.set_ylim([0.40,0.95])
-ax.spines['right'].set_visible(False)
-ax.spines['top'].set_visible(False)
+ax.set_ylabel('F1 Score')
 ax.set_xticks(x)
 ax.set_xticklabels(labels)
-ax.legend(loc=1)
-plt.savefig('/home/nel/Code/VolPy/Paper/F1_train&test.pdf')
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.legend()
 
-#%% F1 score for all datasets
-v1 = {'TEG_Voltron.01.02':0.7647058823529411, 'L1_Voltron.03.35':0.7850467289719626, 
-      'L1_Voltron.04.50':0.9014084507042254, 'HPC_QuasAr.48.05':0.5, 
-      'HPC_QuasAr.48.07':0.4, 'HPC_QuasAr.48.08':0.5}
+#plt.savefig('/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Figures/plos/original_files/figure3/F1_L1.pdf')
+plt.savefig('/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Figures/plos/original_files/figure3/F1_TEG.pdf')
+     
+#%%
+folder = '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/cross'
+files = os.listdir(folder)
+results = {}    
+for mode in ['train','val']:
+    result = {'L1':[], 'Fish':[],'IVQ':[]}
+    for file in files:
+        if mode in file:
+            fnames = folder + '/' + file
+            data = np.load(fnames, allow_pickle=True).item()
+            fish = []; L1 = []; IVQ = [];
+            for keys, values in data.items():
+                if 'Fish' in keys:
+                    fish.append(values['f1_score'])
+                elif 'IVQ' in keys:
+                    IVQ.append(values['f1_score'])
+                else:
+                    L1.append(values['f1_score'])
+            result['Fish'].append(np.array(fish).mean())
+            result['IVQ'].append(np.array(IVQ).mean())
+            result['L1'].append(np.array(L1).mean())
 
-t1 = {'TEG_Voltron.02.01':0.782608695652174, 'TEG_Voltron.03.01': 0.7551020408163265,
-      'L1_Voltron.00.00': 0.7682119205298014,'L1_Voltron.01.00': 0.8468468468468469,
-      'L1_Voltron.01.35': 0.7703703703703704,'L1_Voltron.02.00': 0.8455284552845529,
-      'L1_Voltron.02.80': 0.875,'L1_Voltron.03.00': 0.8571428571428571,
-      'L1_Voltron.04.00': 0.7628865979381443,'HPC_QuasAr.29.06': 0.6666666666666666,
-      'HPC_QuasAr.32.01': 0.6,'HPC_QuasAr.38.05': 0.5714285714285714,
-      'HPC_QuasAr.38.03': 1.0,'HPC_QuasAr.39.07': 0.8333333333333334,
-      'HPC_QuasAr.39.03': 0.8333333333333334,'HPC_QuasAr.39.04': 0.6666666666666666,
-      'HPC_QuasAr.48.01': 0.5}
+    results[mode] = result       
 
-dict1_train={'10192017Fish2-1': 0.782608695652174,
- '10192017Fish3-1': 0.7551020408163265,
- '403106_3min': 0.7682119205298014,
- 'FOV1': 0.8468468468468469,
- 'FOV1_35um': 0.7703703703703704,
- 'FOV2': 0.8455284552845529,
- 'FOV2_80um': 0.875,
- 'FOV3': 0.8571428571428571,
- 'FOV4': 0.7628865979381443,
- 'IVQ29_S5_FOV6': 0.6666666666666666,
- 'IVQ32_S2_FOV1': 0.6,
- 'IVQ38_S1_FOV5': 0.5714285714285714,
- 'IVQ38_S2_FOV3': 1.0,
- 'IVQ39_S1_FOV7': 0.8333333333333334,
- 'IVQ39_S2_FOV3': 0.8333333333333334,
- 'IVQ39_S2_FOV4': 0.6666666666666666,
- 'IVQ48_S7_FOV1': 0.5}
-dict1_val={'06152017Fish1-2': 0.7647058823529411,
- 'FOV3_35um': 0.7850467289719626,
- 'FOV4_50um': 0.9014084507042254,
- 'IVQ48_S7_FOV5': 0.5,
- 'IVQ48_S7_FOV7': 0.4,
- 'IVQ48_S7_FOV8': 0.5}
-dict1 = dict1_train.copy()
-dict1.update(dict1_val)
 
-dict2_train={'06152017Fish1-2': 0.6956521739130435,
- '10192017Fish3-1': 0.6990291262135923,
- 'FOV1': 0.8952380952380953,
- 'FOV2': 0.8429752066115702,
- 'FOV2_80um': 0.8421052631578947,
- 'FOV3': 0.8027210884353742,
- 'FOV3_35um': 0.7766990291262136,
- 'FOV4': 0.8444444444444444,
- 'FOV4_50um': 0.8823529411764706,
- 'IVQ38_S2_FOV3': 1.0,
- 'IVQ39_S1_FOV7': 0.5,
- 'IVQ39_S2_FOV3': 0.7272727272727273,
- 'IVQ39_S2_FOV4': 0.5454545454545454,
- 'IVQ48_S7_FOV1': 0.36363636363636365,
- 'IVQ48_S7_FOV5': 0.47058823529411764,
- 'IVQ48_S7_FOV7': 0.4,
- 'IVQ48_S7_FOV8': 0.26666666666666666}
-dict2_val = {'10192017Fish2-1': 0.6376811594202898,
- '403106_3min': 0.8129032258064516,
- 'FOV1_35um': 0.8059701492537313,
- 'IVQ29_S5_FOV6': 0.6666666666666666,
- 'IVQ32_S2_FOV1': 0.21052631578947367,
- 'IVQ38_S1_FOV5': 0.5454545454545454}
-dict2 = dict2_train.copy()
-dict2.update(dict2_val)
+#%%
+manual = np.load('/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/voltage_v1.2_manual.npy', allow_pickle=True).item() 
 
-dict3_train={'06152017Fish1-2': 0.7076923076923077,
- '10192017Fish2-1': 0.7796610169491526,
- '403106_3min': 0.8734177215189873,
- 'FOV1': 0.8867924528301887,
- 'FOV1_35um': 0.8244274809160306,
- 'FOV3': 0.7671232876712328,
- 'FOV3_35um': 0.822429906542056,
- 'FOV4': 0.8351648351648352,
- 'FOV4_50um': 0.8955223880597015,
- 'IVQ29_S5_FOV6': 0.6666666666666666,
- 'IVQ32_S2_FOV1': 0.5333333333333333,
- 'IVQ38_S1_FOV5': 0.7272727272727273,
- 'IVQ38_S2_FOV3': 1.0,
- 'IVQ39_S1_FOV7': 0.9090909090909091,
- 'IVQ48_S7_FOV5': 0.6153846153846154,
- 'IVQ48_S7_FOV7': 0.5,
- 'IVQ48_S7_FOV8': 0.5}
-dict3_val = {'10192017Fish3-1': 0.7252747252747253,
- 'FOV2': 0.8099173553719008,
- 'FOV2_80um': 0.8181818181818182,
- 'IVQ39_S2_FOV3': 0.6153846153846154,
- 'IVQ39_S2_FOV4': 0.4444444444444444,
- 'IVQ48_S7_FOV1': 0.0}
-dict3 = dict3_train.copy()
-dict3.update(dict3_val)
+result = {'L1':[], 'Fish':[],'IVQ':[]}
+for keys, values in manual.items():
+    result['L1'].append(values['f1_score']['L1'])
+    result['Fish'].append(values['f1_score']['TEG'])
+    result['IVQ'].append(values['f1_score']['HPC'])
 
-dict_mean = {}
-for key in sorted(dict1):
-    print(key)
-    dict_mean[key] = (dict1[key] + dict2[key] + dict3[key])/3
+results['manual'] = result
     
-dict_mean = {
- 'L1_Voltron.00.00':0.8129032258064516,
- 'L1_Voltron.01.00':0.876,
- 'L1_Voltron.01.35':0.8059701492537313,
- 'L1_Voltron.02.00':0.8099173553719008,
- 'L1_Voltron.02.80':0.8181818181818182,
- 'L1_Voltron.03.00':0.801,
- 'L1_Voltron.03.35':0.7850467289719626,
- 'L1_Voltron.04.00':0.814,
- 'L1_Voltron.04.50':0.9014084507042254,      
- 'TEG_Voltron.01.02': 0.7647058823529411,
- 'TEG_Voltron.02.01': 0.6376811594202898,
- 'TEG_Voltron.03.01': 0.7252747252747253,
- 'HPC_QuasAr.29.06': 0.6666666666666666,
- 'HPC_QuasAr.32.01': 0.21052631578947367,
- 'HPC_QuasAr.38.05': 0.5454545454545454,
- 'HPC_QuasAr.38.03': 1.0,
- 'HPC_QuasAr.39.07': 0.747,
- 'HPC_QuasAr.39.03': 0.6153846153846154,
- 'HPC_QuasAr.39.04': 0.4444444444444444,
- 'HPC_QuasAr.48.01': 0.0,
- 'HPC_QuasAr.48.05': 0.5,
- 'HPC_QuasAr.48.07': 0.4,
- 'HPC_QuasAr.48.08': 0.5}
 
-#result = np.array([[key,dict_mean[key]] for key in dict_mean])
+    
+#%% F1 score
+t_mean = [np.array(i).mean() for i in results['train'].values()]
+v_mean = [np.array(i).mean() for i in results['val'].values()]
+m_mean = [np.array(i).mean() for i in results['manual'].values()]
+t_std = [np.std(np.array(i)) for i in results['train'].values()]
+v_std = [np.std(np.array(i)) for i in results['val'].values()]
+m_std = [np.std(np.array(i)) for i in results['manual'].values()]
+
+labels=['L1','TEG','HPC']
+F1_mean = np.stack([t_mean,v_mean, m_mean], axis=1)
+F1_std = np.stack([t_std, v_std, m_std], axis=1)
+x = np.arange(len(labels))
+width = 0.2       # the width of the bars: can also be len(x) sequence
+
+plt.figure()
+plt.title('F1 score')
+ax = plt.gca()
+rects1 = ax.bar(x - width, F1_mean[:,0], width, yerr=F1_std[:,0], label='train', error_kw=dict(ecolor='gray', lw=1.5, capsize=2, capthick=1))
+rects2 = ax.bar(x, F1_mean[:,1], width, yerr=F1_std[:,1], label='val', error_kw=dict(ecolor='gray', lw=1.5, capsize=2, capthick=1))
+rects2 = ax.bar(x + width, F1_mean[:,2], width, yerr=F1_std[:,2], label='manual', error_kw=dict(ecolor='gray', lw=1.5, capsize=2, capthick=1))
+
+
+# Add some text for labels, title and custom x-axis tick labels, etc.
+ax.set_ylabel('F1 Score')
+ax.set_xticks(x)
+ax.set_xticklabels(labels)
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.legend()
+
+
+plt.savefig('/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Figures/plos/original_files/figure3/F1_average.pdf')
+
+#np.round(np.stack([t_mean, v_mean, t_std, v_std]), 2)
+#print('train_mean, val_mean, train_std, val_std:', t_mean.round(2), v_mean, t_std, v_std)
+
+#%% F1 all
+folder = '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1'
+files = os.listdir(folder)
+val = {} 
+for file in files:
+    if 'val' in file:
+        fnames = folder + '/' + file
+        data = np.load(fnames, allow_pickle=True).item()
+        for keys, values in data.items():
+            val[keys] = values['f1_score']
+
+
 plt.figure(figsize=(15,15))
-keys = [key for key in dict_mean]
-values = [dict_mean[key] for key in dict_mean]
+keys = ['403106_3min', 'FOV1', 'FOV1_35um', 'FOV2', 'FOV2_80um', 'FOV3',
+ 'FOV3_35um', 'FOV4', 'FOV4_50um', '06152017Fish1-2', '10192017Fish2-1',
+ '10192017Fish3-1', 'IVQ29_S5_FOV4', 'IVQ29_S5_FOV6', 'IVQ32_S2_FOV1',
+ 'IVQ38_S1_FOV5', 'IVQ38_S2_FOV3', 'IVQ39_S1_FOV7', 'IVQ39_S2_FOV3',
+ 'IVQ39_S2_FOV4', 'IVQ48_S7_FOV1', 'IVQ48_S7_FOV5', 'IVQ48_S7_FOV7', 'IVQ48_S7_FOV8']
+values = [val[key] for key in keys]
 i = 0
-a = np.array([ 0,  1,  2,  3,  4,  5,  6,  7,  8])
-plt.bar(a,values[a[0]:a[-1]+1], width=0.5, label='L1_Voltron', color='red')
-b= np.array([ 9, 10, 11])
-plt.bar(b,values[b[0]:b[-1]+1], width=0.5, label='TEG_Voltron', color='blue')
-c= np.array([ 12, 13, 14,15,16,17,18,19,20,21,22])
-plt.bar(c,values[c[0]:], width=0.5, label='HPC_QuasAr', color='gray')
-
-#plt.bar(1,10)
-#plt.bar(np.arange(len(keys)),values, width=0.5, label='mrcnn')
+a = np.arange(0,9)
+plt.bar(a,values[a[0]:a[-1]+1], width=0.5, label='L1', color='red')
+b= np.arange(9,12)
+plt.bar(b,values[b[0]:b[-1]+1], width=0.5, label='TEG', color='blue')
+c= np.arange(12,24)
+plt.bar(c,values[c[0]:], width=0.5, label='HPC', color='gray')
+plt.legend()
 plt.ylabel('F1 scores')
 plt.xticks(np.arange(len(keys)), keys, rotation='vertical',fontsize=8)
 plt.legend()
@@ -318,8 +172,7 @@ ax = plt.gca()
 ax.spines['right'].set_visible(False)
 ax.spines['top'].set_visible(False)
 plt.tight_layout()
-plt.savefig('/home/nel/Code/VolPy/Paper/pic_paper/F1_alldata_new.pdf')
-
+plt.savefig('/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Figures/plos/original_files/figure3/F1_all.pdf')
 
 
 #%% T vs cpu
@@ -675,35 +528,7 @@ dict3.update(dict3_val.copy())
 
 
 
-#%%
-dict_all = dict1_val.copy()
-dict_all.update(dict2_val.copy())
-dict_all.update(dict3_val.copy())
 
-plt.figure(figsize=(15,15))
-keys = [key for key in sorted(dict_all)]
-keys = ['403106_3min', 'FOV1', 'FOV1_35um', 'FOV2', 'FOV2_80um', 'FOV3',
- 'FOV3_35um', 'FOV4', 'FOV4_50um', '06152017Fish1-2', '10192017Fish2-1',
- '10192017Fish3-1', 'IVQ29_S5_FOV4', 'IVQ29_S5_FOV6', 'IVQ32_S2_FOV1',
- 'IVQ38_S1_FOV5', 'IVQ38_S2_FOV3', 'IVQ39_S1_FOV7', 'IVQ39_S2_FOV3',
- 'IVQ39_S2_FOV4', 'IVQ48_S7_FOV1', 'IVQ48_S7_FOV5', 'IVQ48_S7_FOV7', 'IVQ48_S7_FOV8']
-values = [dict_all[key] for key in keys]
-i = 0
-a = np.arange(0,9)
-plt.bar(a,values[a[0]:a[-1]+1], width=0.5, label='L1', color='red')
-b= np.arange(9,12)
-plt.bar(b,values[b[0]:b[-1]+1], width=0.5, label='TEG', color='blue')
-c= np.arange(12,24)
-plt.bar(c,values[c[0]:], width=0.5, label='HPC', color='gray')
-plt.legend()
-plt.ylabel('F1 scores')
-plt.xticks(np.arange(len(keys)), keys, rotation='vertical',fontsize=8)
-plt.legend()
-ax = plt.gca()
-ax.spines['right'].set_visible(False)
-ax.spines['top'].set_visible(False)
-plt.tight_layout()
-plt.savefig('/home/nel/Code/VolPy/Paper/pic_paper_new/F1_all.pdf')
 
 #%%
 t = np.zeros((3,3))

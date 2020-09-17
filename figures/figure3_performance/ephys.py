@@ -9,6 +9,7 @@ import matplotlib
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 import matplotlib.pyplot as plt
+import os
 import scipy.signal
 
 #%% Some functions
@@ -116,19 +117,108 @@ plt.plot(frame_timing, trace, label='volpy',color='orange')
 plt.plot(frame_timing[spikes], 1.1 * np.max(trace) * np.ones(spikes.shape),
          color='orange', marker='.', fillstyle='none', linestyle='none')
 plt.plot(ephys, label='ephys', color='blue')
-plt.hlines(hline, 0, len(ephys), linestyles='dashed', color='gray')
+#plt.hlines(hline, 0, len(ephys), linestyles='dashed', color='gray')
 etime = scipy.signal.find_peaks(ephys, hline, distance=200)[0]
 plt.plot(etime,  np.max(ephys) * 1.2 * np.ones(etime.shape),
          color='b', marker='.', fillstyle='none', linestyle='none')
 plt.legend()
 
+"""
+#SGPMD-NMF
+trace_pmd = io.imread('/home/nel/Code/volpy_test/invivo-imaging/test_data/09282017Fish1-1/output/temporal_traces.tif')[1]
+trace_pmd = np.concatenate((np.array([0]*100), trace_pmd))[:len(frame_timing)]
+trace_pmd = signal_filter(trace_pmd, freq=15, fr=400)
+trace_pmd = trace_pmd / np.max(trace_pmd)
+plt.plot(frame_timing, trace_pmd, label='pmd',color='red')
+spikes_pmd = scipy.signal.find_peaks(trace_pmd, 0.45, distance=5)[0]
+plt.plot(frame_timing[spikes_pmd],  np.max(ephys) * 1.3 * np.ones(spikes_pmd.shape),
+         color='red', marker='.', fillstyle='none', linestyle='none')
+plt.legend()
+"""
+
+#%%
+import caiman as cm
+from caiman.base.rois import nf_read_roi_zip
+masks = nf_read_roi_zip(os.path.join(root_dir, 'mask.zip'), dims=(44, 128))
+masks_m = masks[0].reshape(-1, order='F')
+m = cm.load('/home/nel/data/voltage_data/simul_electr/johannes/09282017Fish1-1/memmap__d1_44_d2_128_d3_1_order_C_frames_37950_.mmap')
+mm = m.reshape((m.shape[0], -1), order='F')
+trace_mean = (mm[:, masks_m>0]).mean(1)
+trace_mean = signal_filter(-trace_mean[np.newaxis, :], freq=1/3, fr=300)[0]
+trace_mean = signal_filter(trace_mean[np.newaxis, :], freq=10, fr=300)[0]
+trace_mean = trace_mean / trace_mean.max()
+plt.plot(trace_mean)
+spikes_mean = scipy.signal.find_peaks(trace_mean, 0.3, distance=5)[0]
+spikes_mean = np.delete(spikes_mean, np.where(spikes_mean>len(frame_timing))).astype(np.int32)
+
+#%%
+import caiman as cm
+from caiman.base.rois import nf_read_roi_zip
+masks = nf_read_roi_zip(os.path.join(root_dir, 'mask.zip'), dims=(32, 64))
+masks_m = masks[0].reshape(-1, order='F')
+m = cm.load('/home/nel/data/voltage_data/simul_electr/johannes/10052017Fish2-2/memmap__d1_32_d2_64_d3_1_order_C_frames_37950_.mmap')
+mm = m.reshape((m.shape[0], -1), order='F')
+trace_mean = (mm[:, masks_m>0]).mean(1)
+trace_mean = signal_filter(trace_mean[np.newaxis, :], freq=1/3, fr=300)[0]
+trace_mean = signal_filter(trace_mean[np.newaxis, :], freq=10, fr=300)[0]
+trace_mean = trace_mean / trace_mean.max()
+plt.plot(trace_mean)
+spikes_mean = scipy.signal.find_peaks(trace_mean, 0.5, distance=5)[0]
+spikes_mean = np.delete(spikes_mean, np.where(spikes_mean>len(frame_timing))).astype(np.int32)
+
+
+#%%
+est = np.load('/home/nel/data/voltage_data/simul_electr/johannes/10052017Fish2-2/estimates_caiman.npz', allow_pickle=True)['arr_0'].item()
+trace_cm = signal_filter(est.C, freq=10, fr=400)[est.idx]
+trace_cm = trace_cm / trace_cm.max()
+plt.plot(trace_cm)
+spikes_cm = scipy.signal.find_peaks(trace_cm, 0.65, distance=5)[0]
+spikes_cm = np.delete(spikes_cm, np.where(spikes_cm>len(frame_timing))).astype(np.int32)
 #%% Comparison of signal
 scope = [0, 600000]
 max_dist = 500
 precision, recall, F1 = compare_with_ephys_match(sg_gt=ephys, sp_gt=etime, sg=trace, 
                                                  sp=spikes, timepoint=timepoint, 
                                                  max_dist=max_dist, scope=scope, hline=hline)  
-plt.savefig(os.path.join(root_dir, 'result_new.pdf'))
+#plt.savefig(os.path.join(root_dir, 'result_new.pdf'))
+#%%
+scope = [0, 600000]
+max_dist = 500
+precision, recall, F1 = compare_with_ephys_match(sg_gt=ephys, sp_gt=etime, sg=trace_mean, 
+                                                 sp=spikes_mean, timepoint=timepoint, 
+                                                 max_dist=max_dist, scope=scope, hline=hline)  
+
+#%%
+scope = [0, 600000]
+max_dist = 500
+precision, recall, F1 = compare_with_ephys_match(sg_gt=ephys, sp_gt=etime, sg=trace_cm, 
+                                                 sp=spikes_cm, timepoint=timepoint, 
+                                                 max_dist=max_dist, scope=scope, hline=hline)  
+
+#%%
+
+
+
+#%%
+sweep_time=None
+e_t = np.arange(0, scope[1])
+e_sg = ephys[:scope[1]]
+e_sp = etime[etime<scope[1]]
+e_sub = None
+v_t = timepoint[timepoint<scope[1]]
+v_sg = trace[timepoint<scope[1]]
+v_sp = v_t[spikes[timepoint[spikes]<scope[1]]]
+v_sub = None
+save_name = '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Marton/data_new/09282017Fish1-1_output.npz'
+np.savez(save_name, sweep_time=sweep_time, e_sg=e_sg, v_sg=v_sg, 
+         e_t=e_t, v_t=v_t, e_sp=e_sp, v_sp=v_sp, e_sub=e_sub, v_sub=v_sub)
+
+#%%
+plt.plot(e_sg);plt.vlines(e_sp, -14,-10)
+plt.plot(v_t, v_sg); plt.vlines(v_t[v_sp], -20, -16)
+
+
+
 
 #%% Spatial footprint
 Xinds = estimates['ROI'][n][:,0] 
@@ -138,6 +228,7 @@ plt.savefig(os.path.join(root_dir, 'spatial_new.pdf'))
 
 #%% Kaspar's data 
 root_dir = '/home/nel/data/voltage_data/simul_electr/kaspar/Ground truth data/Session1'
+estimates = np.load(os.path.join(root_dir, 'estimates.npz'), allow_pickle=True)['arr_0'].item()
 from scipy import io
 n = 0
 fr = 20000
@@ -150,7 +241,7 @@ frames = np.where(np.logical_and(f['read_starts'][0]>scope[0], f['read_starts'][
 timepoint = np.array([f['read_starts'][0][frames[i]]-scope[0] for i in range(frames.shape[0])])
 
 ephys = f['v'][0][scope[0]:scope[-1]]
-plot_signal_and_spike(ephys, etime, scope)
+#plot_signal_and_spike(ephys, etime, scope)
 trace = estimates['trace_processed'][n]
 spikes = estimates['spikes'][n]
 ephys = ephys - np.mean(ephys)
@@ -158,12 +249,75 @@ ephys = ephys/np.max(ephys)
 trace = trace/np.max(trace)
 etime = scipy.signal.find_peaks(ephys, 0.5, distance=200)[0]
 
+
+#%%
+sweep_time=None
+e_t = np.arange(0, 1000000)
+e_sg = ephys
+e_sp = etime
+e_sub = None
+v_t = timepoint
+v_sg = trace
+v_sp = v_t[spikes[timepoint[spikes]<scope[1]]]
+v_sub = None
+save_name = '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Marton/data_new/Mouse_Session_1.npz'
+np.savez(save_name, sweep_time=sweep_time, e_sg=e_sg, v_sg=v_sg, 
+         e_t=e_t, v_t=v_t, e_sp=e_sp, v_sp=v_sp, e_sub=e_sub, v_sub=v_sub)
+
+#%%
+import numpy as np
+import caiman as cm
+from caiman.source_extraction.volpy.spikepursuit import signal_filter
+from caiman.base.rois import nf_read_roi_zip
+import scipy
+masks = nf_read_roi_zip(os.path.join(root_dir, 'mask.zip'), dims=(80, 128))
+masks_m = masks[0].reshape(-1, order='F')
+m = cm.load('/home/nel/data/voltage_data/simul_electr/kaspar/Ground truth data/Session1/memmap__d1_80_d2_128_d3_1_order_C_frames_24908_.mmap')
+mm = m.reshape((m.shape[0], -1), order='F')
+trace_mean = (mm[:, masks_m>0]).mean(1)
+#trace_mean = signal_filter(-trace_mean[np.newaxis, :], freq=1/3, fr=500)[0]
+trace_mean = signal_filter(trace_mean[np.newaxis, :], freq=10, fr=500)[0]
+trace_mean = trace_mean
+trace_mean = trace_mean / trace_mean.max()
+plt.plot(trace_mean)
+spikes_mean = scipy.signal.find_peaks(trace_mean, 0.5, distance=5)[0]
+#spikes_mean = np.delete(spikes_mean, np.where(spikes_mean>len(frame_timing))).astype(np.int32)
+
+#%%
+est = np.load('/home/nel/data/voltage_data/simul_electr/kaspar/Ground truth data/Session1/estimates_caiman.npz', allow_pickle=True)['arr_0'].item()
+trace_cm = signal_filter(est.C, freq=10, fr=400)[est.idx]
+trace_cm = trace_cm / trace_cm.max()
+plt.plot(trace_cm)
+spikes_cm = scipy.signal.find_peaks(trace_cm, 0.55, distance=5)[0]
+#spikes_cm = np.delete(spikes_cm, np.where(spikes_cm>len(frame_timing))).astype(np.int32)
+
+#%%
+#plt.plot(trace)
+#plt.plot(trace_mean)
+plt.figure();plt.plot(trace_cm)
+#%%
+plt.figure();plt.imshow(est.A[:,idx].toarray().reshape((80, 128), order='F'))
+
+
+
 #%% Comparison
 precision, recall, F1 = compare_with_ephys_match(sg_gt=ephys, sp_gt=etime, sg=trace, 
                                                  sp=spikes, timepoint=timepoint, 
                                                  max_dist=500, scope=[0,1000000], hline=0.4)  
 
 plt.savefig(os.path.join(root_dir, 'result_new.pdf'))
+
+#%%
+precision, recall, F1 = compare_with_ephys_match(sg_gt=ephys, sp_gt=etime, sg=trace_mean, 
+                                                 sp=spikes_mean, timepoint=timepoint, 
+                                                 max_dist=500, scope=[0,1000000], hline=0.4)  
+
+#%%
+precision, recall, F1 = compare_with_ephys_match(sg_gt=ephys, sp_gt=etime, sg=trace_cm, 
+                                                 sp=spikes_cm, timepoint=timepoint, 
+                                                 max_dist=500, scope=[0,1000000], hline=0.4)  
+
+
 
 #%% Spatial footprint
 Xinds = estimates['ROI'][n][:,0] 

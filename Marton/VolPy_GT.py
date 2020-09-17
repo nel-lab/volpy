@@ -5,14 +5,16 @@ Created on Fri Apr 17 17:08:11 2020
 Files for analyzing Marton's GT data
 @author: caichangjia
 """
-
+import caiman as cm
 import numpy as np
 import os
 import json
 from scipy.optimize import linear_sum_assignment
 from scipy.signal import find_peaks
+import matplotlib.pyplot as plt
 
-movie_dir = '/home/nel/data/voltage_data/Marton/454597/Cell_0/40x_patch1/'
+#%%
+#movie_dir = '/home/nel/data/voltage_data/Marton/454597/Cell_0/40x_patch1/'
 #movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_3/40x_1xtube_10A2'
 #movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_3/40x_1xtube_10A3'
 #movie_dir = '/home/nel/data/voltage_data/Marton/462149/Cell_1/40x_1xtube_10A1'
@@ -20,9 +22,27 @@ movie_dir = '/home/nel/data/voltage_data/Marton/454597/Cell_0/40x_patch1/'
 #movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A5'
 #movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A6'
 #movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A7'
+#movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_4/40x_1xtube_10A4'
+#movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_6/40x_1xtube_10A10'
+#movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_6/40x_1xtube_10A11'
+#movie_dir = '/home/nel/data/voltage_data/Marton/466769/Cell_0/40x_1xtube_10A_1'
+#movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A8' # EPSP
+#movie_dir = '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A9' # EPSP
+#movie_dir = '/home/nel/data/voltage_data/Marton/462149/Cell_3/40x_1xtube_10A3' # 1KHZ
+#movie_dir = '/home/nel/data/voltage_data/Marton/462149/Cell_3/40x_1xtube_10A4' # 1KHZ
+movie_dir = '/home/nel/data/voltage_data/Marton/466769/Cell_2/40x_1xtube_10A_6'
+movie_dir = '/home/nel/data/voltage_data/Marton/466769/Cell_2/40x_1xtube_10A_4'
+movie_dir = '/home/nel/data/voltage_data/Marton/466769/Cell_3/40x_1xtube_10A_8'
 idx = 0
+volpy_path = os.path.join(movie_dir, 'volpy')
+if not os.path.isdir(volpy_path):
+   os.makedirs(volpy_path)
 
-#%% import ephys data
+
+
+#%%
+np.save(os.path.join(os.path.dirname(os.path.dirname(fnames[0])), 'volpy')+'/estimates.npy', vpy.estimates)
+#%% load voltage data
 frame_times = np.load(os.path.join(movie_dir, 'frame_times.npy'))
 ephys_files_dir = os.path.join(movie_dir,'ephys')
 ephys_files = sorted(os.listdir(ephys_files_dir))
@@ -41,42 +61,16 @@ for ephys_file in ephys_files:
             sweep_metadata.append(json.load(json_file))     
 sweep_metadata[0] # here is an example of a sweep metadata
 
-#%% visualize ephys and voltage data
-dff = vpy.estimates['dFF'][idx]
-%matplotlib inline
-xlimits = [frame_times[0],frame_times[-1]]
-fig=plt.figure()
-ax_ephys = fig.add_axes([0,0,2,.8])
-ax_stim = fig.add_axes([0,-.5,2,.4])
-for time,response,stimulus in zip(sweep_time,sweep_response,sweep_stimulus):
-    ax_ephys.plot(time,response,'k-')
-    ax_stim.plot(time,stimulus,'k-')
-if dff is not None:
-    ax_ophys = fig.add_axes([0,1,2,.8])
-    ax_ophys.plot(frame_times,dff,'g-')
-    ax_ophys.autoscale(tight = True)
-    #ax_ophys.invert_yaxis()
-    ax_ophys.set_xlim(xlimits)
-    ax_ophys.set_ylabel('dF/F')
-    vals = ax_ophys.get_yticks()
-    ax_ophys.set_yticklabels(['{:,.2%}'.format(x) for x in vals])
-    
-ax_ephys.set_xlim(xlimits)
-ax_ephys.set_ylabel('Membrane potential (mV)')
-ax_stim.set_xlim(xlimits)
-ax_stim.set_xlabel('Time from obtaining whole cell (s)')
-ax_stim.set_ylabel('Stimulus (pA)')
-
-#%% load voltage data
-v_sg = vpy.estimates['dFF'][idx]
-v_sp = vpy.estimates['spikes'][idx]
+estimates = np.load(volpy_path+'/estimates.npy', allow_pickle=True).item()
+v_sg = estimates['t'][idx]
+v_sp = estimates['spikes'][idx]
 #plt.plot(dff)
 v_t = frame_times
-v_sp = v_t[vpy.estimates['spikes'][idx]]
+v_sp = v_t[estimates['spikes'][idx]]
 
-for i in range(len(sweep_time) - 1):
-    v_sp = np.delete(v_sp, np.where([np.logical_and(v_sp>sweep_time[i][-1], v_sp<sweep_time[i+1][0])])[1])
-v_sp = np.delete(v_sp, np.where([v_sp>sweep_time[i+1][-1]])[1])
+#for i in range(len(sweep_time) - 1):
+#    v_sp = np.delete(v_sp, np.where([np.logical_and(v_sp>sweep_time[i][-1], v_sp<sweep_time[i+1][0])])[1])
+#v_sp = np.delete(v_sp, np.where([v_sp>sweep_time[i+1][-1]])[1])
 
 plt.plot(v_t, v_sg, label='ephys', color='blue')
 plt.plot(v_sp, np.max(v_sg)*1.1*np.ones(v_sp.shape),color='b', marker='.', ms=2, fillstyle='full', linestyle='none')
@@ -88,6 +82,7 @@ e_sg = np.delete(e_sg, np.where([np.logical_or(e_t<v_t[0], e_t>v_t[-1])])[1])
 e_t = np.delete(e_t, np.where([np.logical_or(e_t<v_t[0], e_t>v_t[-1])])[1])
 hline= 2/3 * e_sg.max() + 1/3 * e_sg.min()
 e_sp = e_t[find_peaks(e_sg, hline, distance=10)[0]]
+plt.figure()
 plt.plot(e_t, e_sg, label='ephys', color='blue')
 plt.hlines(hline, e_t[0], e_t[-1], linestyles='dashed', color='gray')
 plt.plot(e_sp, np.max(e_sg)*1.1*np.ones(e_sp.shape),color='b', marker='.', ms=2, fillstyle='full', linestyle='none')
@@ -110,7 +105,7 @@ for i in locs:
 from caiman.source_extraction.volpy.spikepursuit import signal_filter
 e_sub = signal_filter(data,20, fr=sweep_metadata[0]['sample_rate'], order=5, mode='low') 
 
-v_sub = vpy.estimates['t_sub'][idx]
+v_sub = estimates['t_sub'][idx]
 plt.plot(e_t, e_sg - np.percentile(e_sg,3))
 plt.plot(e_t, data)
 plt.plot(e_t, e_sub)
@@ -260,14 +255,32 @@ def metric(sweep_time, e_sg, e_sp, e_t, e_sub, v_sg, v_sp, v_t, v_sub, save=Fals
     return precision, recall, F1, sub_corr, e_match, v_match, mean_time
     
 #%% save
-volpy_path = os.path.join(movie_dir, 'volpy')
-if not os.path.isdir(volpy_path):
-   os.makedirs(volpy_path)
 temp = movie_dir.split('/')
-np.savez(f'{volpy_path}/{temp[-3]}_{temp[-2]}_{temp[-1]}_output_{vpy.params.volspike["threshold_method"]}.npz', sweep_time=sweep_time, e_sg=e_sg, v_sg=v_sg, 
+
+save_name = f'{volpy_path}/{temp[-3]}_{temp[-2]}_{temp[-1]}_output.npz' 
+
+np.savez(save_name, sweep_time=sweep_time, e_sg=e_sg, v_sg=v_sg, 
          e_t=e_t, v_t=v_t, e_sp=e_sp, v_sp=v_sp, e_sub=e_sub, v_sub=v_sub)
 
+
+#%%
+mm = np.array(m)
+mm.shape
+plt.imshow(m[0])
+plt.imshow(mm[0,80:110, 180:280])
+plt.imshow(mm[0,80:110, 250:280])
+plt.imshow(mm[0,85:115, 255:285])
+plt.imshow(mm[0,75:105, 255:285])
+mmm = mm[:, 75:105, 255:285]
+mmm.shape
+mmm
+save_name = f'{volpy_path}/{temp[-3]}_{temp[-2]}_{temp[-1]}.tif'
+save_name
+mmm.shape
+cm.movie(mmm).save(save_name)
+
 #%% firing rate
+"""
 file_list = ['/home/nel/data/voltage_data/Marton/456462/Cell_3/40x_1xtube_10A2/volpy/output_simple.npz',
              '/home/nel/data/voltage_data/Marton/456462/Cell_3/40x_1xtube_10A3/volpy/output_simple.npz']
 file_list = [f'/home/nel/data/voltage_data/Marton/462149/Cell_1/40x_1xtube_10A1/volpy/output_{vpy.params.volspike["threshold_method"]}.npz', 
@@ -281,6 +294,17 @@ file_list = ['/home/nel/data/voltage_data/Marton/454597/Cell_0/40x_patch1/volpy/
 file_list = ['/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A5/volpy/456462_Cell_5_40x_1xtube_10A5_output_simple.npz',
              '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A6/volpy/456462_Cell_5_40x_1xtube_10A6_output_simple.npz',
              '/home/nel/data/voltage_data/Marton/456462/Cell_5/40x_1xtube_10A7/volpy/456462_Cell_5_40x_1xtube_10A7_output_simple.npz']
+"""
+#file_list = ['/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Marton/data/454597_Cell_0_40x_patch1_output_simple.npz']
+"""
+base_folder = os.path.dirname(os.path.dirname(file_list[0]))
+base_name = os.path.basename(file_list[0]).split('_')[:-2]
+base_name = [n+'_' for n in base_name]
+base_name = ''.join(base_name)
+"""
+
+#file_list = ['/home/nel/data/voltage_data/Marton/456462/Cell_4/40x_1xtube_10A4/volpy/456462_Cell_4_40x_1xtube_10A4_output.npz']
+file_list = [save_name]
 fig = plt.figure(figsize=(12,12))
 fig.suptitle(f'subject_id:{movie_dir.split("/")[-3]}  Cell number:{movie_dir.split("/")[-2]}')
 
@@ -291,7 +315,7 @@ sub = []
 for file in file_list:
     dict1 = np.load(file, allow_pickle=True)
     precision, recall, F1, sub_corr, e_match, v_match, mean_time = metric(dict1['sweep_time'], dict1['e_sg'], 
-                                                                          dict1['e_sp'], dict1['e_t'], dict1['e_sub']
+                                                                          dict1['e_sp'], dict1['e_t'], dict1['e_sub'],
                                                                           dict1['v_sg'], dict1['v_sp'], 
                                                                           dict1['v_t'], dict1['v_sub'], save=False)
     pr.append(np.array(precision).mean().round(2))
@@ -299,7 +323,7 @@ for file in file_list:
     F.append(np.array(F1).mean().round(2))
     sub.append(np.array(sub_corr).mean().round(2))
     ax1 = fig.add_axes([0.05, 0.8, 0.9, 0.15])
-    xlimits = [frame_times[0],frame_times[-1]]
+    #xlimits = [frame_times[0],frame_times[-1]]
     e_fr = np.unique(np.floor(dict1['e_sp']), return_counts=True)
     v_fr = np.unique(np.floor(dict1['v_sp']), return_counts=True)
     ax1.plot(e_fr[0], e_fr[1], color='black')
@@ -310,7 +334,7 @@ for file in file_list:
     
     ax2 = fig.add_axes([0.05, 0.6, 0.9, 0.15])
     ax2.vlines(list(set(dict1['v_sp'])-set(v_match)), 2.75,3.25, color='red')
-    ax2.vlines(dict1['v_sp'], 1.75,2.25, color='green')
+    ax2.vlines(v_sp, 1.75,2.25, color='green')
     ax2.vlines(dict1['e_sp'], 0.75,1.25, color='black')
     ax2.vlines(list(set(dict1['e_sp'])-set(e_match)), -0.25,0.25, color='red')
     plt.yticks(np.arange(4), ['False Negative', 'Ephys', 'Voltage', 'False Positive'])
@@ -328,50 +352,193 @@ for file in file_list:
     #plt.savefig(f'{volpy_path}/metric_{vpy.params.volspike["threshold_method"]}.pdf', bbox_inches='tight')
 ax3.legend([f'precision:{pr}', f'recall: {re}', f'F1: {F}'])
 ax4.legend([f'corr:{sub}'])
-#plt.savefig(f'{volpy_path}/metric_all_{vpy.params.volspike["threshold_method"]}.pdf', bbox_inches='tight')
-#%%
-metric = {'precision':precision, 'recall':recall, 'F1':F1, 'sub_corr':sub_corr}
-
-
+#plt.savefig(f'{base_folder}/output/{base_name}.pdf', bbox_inches='tight')
 
 #%%
-dict1 = {}
-n1 = np.load('/home/nel/data/voltage_data/Marton/456462/Cell_3/40x_1xtube_10A2/volpy/output_simple.npz', allow_pickle=True)
-n2 = np.load('/home/nel/data/voltage_data/Marton/456462/Cell_3/40x_1xtube_10A3/volpy/output_simple.npz', allow_pickle=True)
-for i in n1:
-    if str(i) != 'metric':
-        dict1[i] = np.concatenate((n1[f'{i}'], n2[f'{i}']))
-sweep_time = dict1['sweep_time']
-e_sg = dict1['e_sg'] 
-v_sg = dict1['v_sg']
-e_sp = dict1['e_sp'] 
-v_sp = dict1['v_sp']
-e_t = dict1['e_t']
-v_t =  dict1['v_t']
-e_sub = dict1['e_sub']
-v_sub = dict1['v_sub']
-
+locs = signal.find_peaks(datafilt, height=thresh2)[0]
 
 
 
 #%%
-dic = {}
-for key in dict1.keys():
-    dic
-    
-    
-    
-    
+#F1_orig = [0.96, 0.94, 0.7, 0.28, 0.91, 0.72, 0.97, 0.79]
+file_list = ['/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Marton/data_new/454597_Cell_0_40x_patch1_output.npz',
+             '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Marton/data_new/456462_Cell_3_40x_1xtube_10A2_output.npz',
+             '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Marton/data_new/456462_Cell_3_40x_1xtube_10A3_output.npz',
+             '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Marton/data_new/456462_Cell_5_40x_1xtube_10A5_output.npz',
+             '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Marton/data_new/456462_Cell_5_40x_1xtube_10A6_output.npz',
+             '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Marton/data_new/456462_Cell_5_40x_1xtube_10A7_output.npz',
+             '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Marton/data_new/462149_Cell_1_40x_1xtube_10A1_output.npz',
+             '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Marton/data_new/462149_Cell_1_40x_1xtube_10A2_output.npz']
 
+pr= []
+re = []
+F = []
+sub = []
+update = False
+
+for file in file_list:
+    dict1 = np.load(file, allow_pickle=True)
+    v_sp = dict1['v_sp']
+
+    if update:
+        datafilt, v_sp, t_rec, templates, _, thresh2 = denoise_spikes(dict1['v_sg'], window_length=8, fr=400, hp_freq=1, threshold_method='simple',
+                      min_spikes=5, threshold=3.5, last_round=False, do_plot=False)
+        v_sp = dict1['v_t'][v_sp]
+        
+        for i in range(len(dict1['sweep_time']) - 1):
+            v_sp = np.delete(v_sp, np.where([np.logical_and(v_sp>dict1['sweep_time'][i][-1], v_sp<dict1['sweep_time'][i+1][0])])[1])
+        v_sp = np.delete(v_sp, np.where([v_sp>dict1['sweep_time'][i+1][-1]])[1])
+
+    precision, recall, F1, sub_corr, e_match, v_match, mean_time = metric(dict1['sweep_time'], dict1['e_sg'], 
+                                                                          dict1['e_sp'], dict1['e_t'], dict1['e_sub'],
+                                                                          dict1['v_sg'], v_sp, 
+                                                                          dict1['v_t'], dict1['v_sub'], save=False)
+    pr.append(np.array(precision).mean().round(2))
+    re.append(np.array(recall).mean().round(2))
+    F.append(np.array(F1).mean().round(2))
+    sub.append(np.array(sub_corr).mean().round(2))
+
+
+#%%
+from caiman.source_extraction.volpy.spikepursuit import denoise_spikes
+from caiman.source_extraction.volpy.spikepursuit import signal_filter
+
+
+#%%
+window = 20000
+stride = 4000
+T = len(v_sg)
+n = int((T - window) / stride+1)
+mv_mean = []
+mv_std = []
+mv_peak = []
+v_sg = signal_filter(v_sg, 1, 400, order=5)
+#v_sg = v_sg - np.median(v_sg)
+
+for i in range(n):
+    data = datafilt[stride * i: stride * i + window]
+    ff1 = -data * (data < 0)
+    Ns = np.sum(ff1 > 0)
+    mv_std.append(np.sqrt(np.divide(np.sum(ff1**2), Ns)))
+    spike = v_sp[np.where(np.logical_and(v_sp >= stride * i, v_sp < stride * i + window))[0]]
+    mv_peak.append(v_sg[spike].mean())
+    
+plt.plot(mv_std/max(mv_std))
+plt.plot(mv_peak/max(mv_peak))
+plt.legend(['std', 'peak height'])
+#%%
+window = 10000
+T = len(v_sg)
+n = int(np.ceil(T / window))
+mv_mean = []
+mv_std = []
+mv_peak = []
+mv_diff = []
+#v_sg = signal_filter(v_sg, 1, 400, order=5)
+#v_sg = v_sg - np.median(v_sg)
+
+for i in range(n):
+    data = datafilt[i * window: (i + 1) * window]
+    ff1 = -data * (data < 0)
+    Ns = np.sum(ff1 > 0)
+    mv_std.append(np.sqrt(np.divide(np.sum(ff1**2), Ns)))
+    spike = v_sp[np.where(np.logical_and(v_sp >= window * i, v_sp < (i + 1) * window))[0]]
+    mv_peak.append(datafilt[spike].mean())
+    mv_diff.append(np.percentile(data,99) - np.percentile(data,1))
+    
+mv_std = mv_std / max(mv_std)
+mv_diff = mv_diff / max(mv_diff)
+mv_peak = mv_peak / max(mv_peak)
+z = np.polyfit(list(range(n)), mv_diff, deg=3)
+p = np.poly1d(z)
+decay = p(list(range(n)))
+decay = decay / max(decay)
+
+plt.plot(mv_std)
+plt.plot(mv_peak)
+plt.plot(decay)
+plt.plot(mv_diff)   
+
+plt.legend(['std', 'peak height', 'decay'])
+
+data = datafilt.copy()
+ff1 = -data * (data < 0)
+Ns = np.sum(ff1 > 0)
+std = np.sqrt(np.divide(np.sum(ff1**2), Ns))
+
+peaks = []
+for i in range(n):
+    data = datafilt[i * window: (i + 1) * window]
+    thresh = 3.5 * std * decay[i]
+    peak = signal.find_peaks(data, height=thresh)[0]
+    peaks.append(peak + i * window)
+    
+peaks= np.concatenate(peaks)
+
+v_sp = peaks
+v_sp = dict1['v_t'][v_sp]
+
+for i in range(len(dict1['sweep_time']) - 1):
+    v_sp = np.delete(v_sp, np.where([np.logical_and(v_sp>dict1['sweep_time'][i][-1], v_sp<dict1['sweep_time'][i+1][0])])[1])
+v_sp = np.delete(v_sp, np.where([v_sp>dict1['sweep_time'][i+1][-1]])[1])
+
+
+
+
+
+#%%
+from scipy import signal
+data = dict1['v_sg']
+data = data - np.median(data)
+data = signal_filter(data, 1, 400, order=5)
+#ff1 = -data * (data < 0)
+#Ns = np.sum(ff1 > 0)
+#std = np.sqrt(np.divide(np.sum(ff1**2), Ns)) 
+#thresh = 3.5 * std
+locs = signal.find_peaks(data, height=8)[0]
+v_sp = v_t[locs]
+
+
+
+#%%
+plt.plot(dict1['v_t'], dict1['v_sg'])
+plt.plot(v_sp, np.ones(v_sp.shape) * 1.1 * np.max(dict1['v_sg']), 'o', c='blue')
+plt.plot(dict1['e_sp'], np.ones(dict1['e_sp'].shape) * 1.2 * np.max(dict1['v_sg']), 'o', c='red')
+#plt.plot(dict1['v_t'], t_rec)
     
 #%%
 from caiman.source_extraction.volpy.utils import view_components
-utils.view_components(vpy.estimates, img_corr, [idx], frame_times=frame_times, gt_times=e_sp)
+utils.view_components(estimates, img_corr, [idx], frame_times=frame_times, gt_times=e_sp)
 
 
-#%%
-import matplotlib.pyplot as plt
-import numpy as np
+#%% import ephys data
+
+
+#%% visualize ephys and voltage data
+dff = estimates['dFF'][idx]
+%matplotlib inline
+xlimits = [frame_times[0],frame_times[-1]]
+fig=plt.figure()
+ax_ephys = fig.add_axes([0,0,2,.8])
+ax_stim = fig.add_axes([0,-.5,2,.4])
+for time,response,stimulus in zip(sweep_time,sweep_response,sweep_stimulus):
+    ax_ephys.plot(time,response,'k-')
+    ax_stim.plot(time,stimulus,'k-')
+if dff is not None:
+    ax_ophys = fig.add_axes([0,1,2,.8])
+    ax_ophys.plot(frame_times,dff,'g-')
+    ax_ophys.autoscale(tight = True)
+    #ax_ophys.invert_yaxis()
+    ax_ophys.set_xlim(xlimits)
+    ax_ophys.set_ylabel('dF/F')
+    vals = ax_ophys.get_yticks()
+    ax_ophys.set_yticklabels(['{:,.2%}'.format(x) for x in vals])
+    
+ax_ephys.set_xlim(xlimits)
+ax_ephys.set_ylabel('Membrane potential (mV)')
+ax_stim.set_xlim(xlimits)
+ax_stim.set_xlabel('Time from obtaining whole cell (s)')
+ax_stim.set_ylabel('Stimulus (pA)')
 
 
 
@@ -437,7 +604,7 @@ def compare_with_ephys_match(sg_gt, sp_gt, sg, sp, timepoint, max_dist=None, sco
     return precision, recall, F1    
 
 #%% For one video
-dff = vpy.estimates['dFF'][0]
+dff = estimates['dFF'][0]
 #dff = None
 xlimits = [frame_times[0],frame_times[len(dff)-1]]
 #xlimits = [400, 405]
