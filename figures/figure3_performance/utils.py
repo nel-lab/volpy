@@ -34,8 +34,8 @@ def load_gt(folder):
     spikes = gt['ST'][0][0][0]
     spatial = gt['IM2'][0][0]
     temporal = gt['trace'][0][0][:,:,0]
-    spatial[spatial > np.median(spatial) * 5] = 1
     spatial[spatial <= np.median(spatial) * 5] = 0
+    spatial[spatial > 0] = 1
     spatial = spatial.transpose([2, 0, 1])
     return spatial, temporal, spikes
 

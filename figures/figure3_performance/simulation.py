@@ -21,12 +21,16 @@ from demo_voltage_simulation import run_volpy
 from caiman_on_voltage import run_caiman
 from pca_ica import run_pca_ica
 from utils import normalize, flip_movie, load_gt, extract_spikes
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 import matplotlib.pyplot as plt
 from match_spikes import match_spikes_greedy, compute_F1
 from scipy.signal import find_peaks
 #from simulation_sgpmd import run_sgpmd_demixing
 
 ROOT_FOLDER = '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/test_data/simulation'
+SAVE_FOLDER = '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Figures/plos/original_files/figure3/simulation'
 
 #%% Generate simulation movie
 plt.imshow(m[0]);plt.colorbar()
@@ -39,7 +43,7 @@ scipy.io.savemat('/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/test_data/simulatio
                  {'data':mm, "sampleRate":400.0})
 
 #%% Move file in folders
-names = [f'sim3_{i}' for i in range(13, 17)]
+names = [f'sim4_{i}' for i in range(13, 16)]
 for name in names:
     try:
         os.makedirs(os.path.join(ROOT_FOLDER, name))
@@ -51,7 +55,8 @@ for name in names:
         shutil.move(os.path.join(ROOT_FOLDER, file), os.path.join(ROOT_FOLDER, name, file))
 
 #%% save in .hdf5
-names = [f'sim3_{i}' for i in range(10, 17)]
+#names = [f'sim3_{i}' for i in range(10, 17)]
+#names = [f'sim4_{i}' for i in range(1, 4)]
 for name in names:
     fnames_mat = f'/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/test_data/simulation/{name}/{name}.mat'
     m = scipy.io.loadmat(fnames_mat)
@@ -62,10 +67,11 @@ for name in names:
 #%% 
 for name in names:
     try:
-        #os.makedirs(os.path.join(ROOT_FOLDER, name, 'caiman'))
-        #os.makedirs(os.path.join(ROOT_FOLDER, name, 'volpy'))
-        #os.makedirs(os.path.join(ROOT_FOLDER, name, 'pca-ica'))
+        os.makedirs(os.path.join(ROOT_FOLDER, name, 'caiman'))
+        os.makedirs(os.path.join(ROOT_FOLDER, name, 'volpy'))
+        os.makedirs(os.path.join(ROOT_FOLDER, name, 'pca-ica'))
         os.makedirs(os.path.join(ROOT_FOLDER, name, 'sgpmd'))
+        os.makedirs(os.path.join(ROOT_FOLDER, name, 'spikepursuit'))
         print('make folder')
     except:
         print('already exist')
@@ -76,6 +82,16 @@ for name in names:
     m  = cm.load(fnames)
     mm = flip_movie(m)
     mm.save(os.path.join(folder, 'caiman', name+'_flip.hdf5'))
+    
+#%%
+for name in names:
+    folder = os.path.join(ROOT_FOLDER, name)
+    fnames = os.path.join(folder, f'{name}.hdf5')
+    m  = cm.load(fnames)
+    mm = m.transpose([1, 2, 0])    
+    scipy.io.savemat(os.path.join(ROOT_FOLDER, name, 'spikepursuit', f'{name}.mat'), 
+                 {'data':mm, "sampleRate":400.0})
+
     
 #%% move to volpy folder
 for name in names:
@@ -105,18 +121,30 @@ for name in names:
     m = cm.load(os.path.join(folder, file))
     m.save(os.path.join(s_folder, name+'.tif'))
     
+#%%
+for name in names:
+    folder = os.path.join(ROOT_FOLDER, name)
+    spatial, temporal, spikes = load_gt(folder)  
+    #ROIs = spatial.transpose([1,2,0])
+    ROIs = spatial.copy()
+    
+    volpy_folder = os.path.join(folder, 'volpy')
+    np.save(os.path.join(volpy_folder, 'ROIs_gt'), ROIs)
+    
+    
+    
 #%% volpy params
-for threshold in np.arange(2.5, 4.1, 0.1):
+#for ridge_bg in [0.5, 0.1, 0.01, 0.001, 0]:
     context_size = 35                             # number of pixels surrounding the ROI to censor from the background PCA
     flip_signal = True                            # Important!! Flip signal or not, True for Voltron indicator, False for others
     hp_freq_pb = 1 / 3                            # parameter for high-pass filter to remove photobleaching
     threshold_method = 'simple'                   # 'simple' or 'adaptive_threshold'
     min_spikes= 30                                # minimal spikes to be found
-    threshold = np.round(threshold, 2)                               # threshold for finding spikes, increase threshold to find less spikes
+    threshold = 3.0                               # threshold for finding spikes, increase threshold to find less spikes
     do_plot = False                               # plot detail of spikes, template for the last iteration
     ridge_bg= 0.1                                 # ridge regression regularizer strength for background removement, larger value specifies stronger regularization 
     sub_freq = 20                                 # frequency for subthreshold extraction
-    weight_update = 'ridge'                       # 'ridge' or 'NMF' for weight update
+    weight_update = 'NMF'                       # 'ridge' or 'NMF' for weight update
     n_iter = 2
     
     options={'context_size': context_size,
@@ -132,7 +160,7 @@ for threshold in np.arange(2.5, 4.1, 0.1):
                'n_iter': n_iter}
 
     #%% run volpy
-    names = [f'sim3_{i}' for i in range(10, 17)]
+    #names = [f'sim3_{i}' for i in range(10, 17)]
     for name in names:
         folder = os.path.join(ROOT_FOLDER, name)
         volpy_folder = os.path.join(folder, 'volpy')
@@ -140,7 +168,7 @@ for threshold in np.arange(2.5, 4.1, 0.1):
         run_volpy(fnames, options=options, do_motion_correction=False, do_memory_mapping=False)
     
 #%% run caiman
-names = [f'sim3_{i}' for i in range(10, 17)]
+#names = [f'sim3_{i}' for i in range(10, 17)]
 for name in names:
     folder = os.path.join(ROOT_FOLDER, name)
     fnames = os.path.join(folder, 'caiman', f'{name}_flip.hdf5')
@@ -161,11 +189,16 @@ for name in names:
 
 
 #%%
-for threshold in np.arange(2.5, 4.1, 0.1):
-    threshold = np.round(threshold, 2)
+#for ridge_bg in [0.5, 0.1, 0.01, 0.001, 0]:
+names = [f'sim4_{i}' for i in range(1, 16)]
+#distance = [f'dist_{i}' for i in [5, 6, 7, 10, 15]]
+distance = [f'dist_{i}' for i in [5, 6, 7, 10, 15]]
+
+for idx, dist in enumerate(distance):  
+    select = np.arange(idx * 3, (idx + 1) * 3)
     v_result_all = []
-    names = [f'sim3_{i}' for i in range(10, 17)]
-    for name in names:
+    #names = [f'sim3_{i}' for i in range(10, 17)]
+    for name in np.array(names)[select]:
         folder = os.path.join(ROOT_FOLDER, name)
         spatial, temporal, spikes = load_gt(folder)
         summary_file = os.listdir(os.path.join(folder, 'volpy'))
@@ -173,9 +206,12 @@ for threshold in np.arange(2.5, 4.1, 0.1):
         summary = cm.load(os.path.join(folder, 'volpy', summary_file))
         
         v_folder = os.path.join(folder, 'volpy')
-        v_files = sorted([file for file in os.listdir(v_folder) if f'simple_{threshold}' in file]) # 'simple_3.0' #'adaptive' in file and '0.1'
+        v_files = sorted([file for file in os.listdir(v_folder) if f'simple_3.0' in file and f'bg_{ridge_bg}.npy' in file]) # 'simple_3.0' #'adaptive' in file and '0.1'
+        #v_files = sorted([file for file in os.listdir(v_folder) if 'adaptive' in file])
+        #v_files = sorted([file for file in os.listdir(v_folder) if 'NMF' in file])
         v_file = v_files[0]
         v = np.load(os.path.join(v_folder, v_file), allow_pickle=True).item()
+        
         
         v_spatial = v['weights'].copy()
         v_temporal = v['t'].copy()
@@ -184,10 +220,15 @@ for threshold in np.arange(2.5, 4.1, 0.1):
         v_templates = v['templates'].copy()
         v_spikes = v['spikes'].copy()
         
+        #plt.figure(); plt.suptitle(f'distance:{dist}');plt.subplot(1,2,1);plt.imshow(v_spatial[0]); plt.subplot(1,2,2);plt.imshow(v_spatial[1]);
+        #plt.figure(); plt.suptitle(f'distance:{dist}');plt.subplot(1,2,1);plt.imshow(v_spatial[0]); plt.subplot(1,2,2);plt.imshow(v_spatial[1]);
         
+#%%        
         tp_gt, tp_comp, fn_gt, fp_comp, performance_cons_off = nf_match_neurons_in_binary_masks(
                 spatial, v_ROIs, thresh_cost=1, min_dist=10, print_assignment=True,
-                plot_results=True, Cn=summary[0], labels=['gt', 'volpy'])    
+                plot_results=True, Cn=summary[2], labels=['gt', 'volpy'])   
+        
+        plt.savefig(os.path.join(SAVE_FOLDER, 'simulation_Mask_RCNN_result_spikeamp_0.1_corr.pdf'))
         
         v_temporal = v_temporal[tp_comp]
         v_templates = v_templates[tp_comp]
@@ -213,7 +254,9 @@ for threshold in np.arange(2.5, 4.1, 0.1):
         print(f"volpy average 10 neurons:{np.array(v_result['F1']).sum()/10}")    
         
         #np.save(os.path.join(ROOT_FOLDER, 'result', 'volpy_threshold', f'volpy_adaptive_thresh'), v_result_all)
-        np.save(os.path.join(ROOT_FOLDER, 'result', 'volpy_threshold', f'volpy_thresh_{threshold}'), v_result_all)
+        #np.save(os.path.join(ROOT_FOLDER, 'result', 'volpy_threshold', f'volpy_thresh_{threshold}'), v_result_all)
+        #np.save(os.path.join(ROOT_FOLDER, 'result', 'volpy_ridge_bg', f'volpy_bg_{ridge_bg}'), v_result_all)
+    np.save(os.path.join(ROOT_FOLDER, 'result_overlap', dist, f'volpy_{dist}'), v_result_all)
     
     #np.save(os.path.join(folder, 'vpy_F1.npy'), v_result)
     #np.save(os.path.join(ROOT_FOLDER, 'result', 'thresh_3.0', f'volpy_thresh_{np.round(threshold, 2)}'), v_result_all)
@@ -223,66 +266,74 @@ for threshold in np.arange(2.5, 4.1, 0.1):
 #%%
 #for threshold in np.arange(2.5, 4.1, 0.1):
 #    threshold = np.round(threshold, 2)
-c_result_all = []
-names = [f'sim3_{i}' for i in range(10, 17)]
-for name in names:
-    folder = os.path.join(ROOT_FOLDER, name)
-    spatial, temporal, spikes = load_gt(folder)
-    summary_file = os.listdir(os.path.join(folder, 'volpy'))
-    summary_file = [file for file in summary_file if 'summary' in file][0]
-    summary = cm.load(os.path.join(folder, 'volpy', summary_file))
+names = [f'sim4_{i}' for i in range(1, 16)]
+distance = [f'dist_{i}' for i in [5, 6, 7, 10, 15]]
 
-#%%
-    c_folder = os.path.join(folder, 'caiman')
-    caiman_files = [file for file in os.listdir(c_folder) if 'caiman_sim' in file][0]
-    c = np.load(os.path.join(c_folder, caiman_files), allow_pickle=True).item()
-    c_spatial = c.A.toarray().copy()
-    c_spatial = c_spatial.reshape([50, 50, c_spatial.shape[1]], order='F').transpose([2, 0, 1])
-    c_spatial_p = c_spatial.copy()
-    for idx in range(len(c_spatial_p)):
-        c_spatial_p[idx][c_spatial_p[idx] < c_spatial_p[idx].max() * 0.15] = 0
-        c_spatial_p[idx][c_spatial_p[idx] >= c_spatial_p[idx].max() * 0.15] = 1
-    c_temporal = c.C.copy()    
-   
-    #%%
-    tp_gt, tp_comp, fn_gt, fp_comp, performance_cons_off = nf_match_neurons_in_binary_masks(
-            spatial, c_spatial_p, thresh_cost=0.95, min_dist=10, print_assignment=True,
-            plot_results=True, Cn=summary[0], labels=['gt', 'caiman'])    
+for idx, dist in enumerate(distance):  
+    select = np.arange(idx * 3, (idx + 1) * 3)
+    c_result_all = []
+    #names = [f'sim3_{i}' for i in range(10, 17)]
+    for name in np.array(names)[select]:
+        folder = os.path.join(ROOT_FOLDER, name)
+        spatial, temporal, spikes = load_gt(folder)
+        summary_file = os.listdir(os.path.join(folder, 'volpy'))
+        summary_file = [file for file in summary_file if 'summary' in file][0]
+        summary = cm.load(os.path.join(folder, 'volpy', summary_file))
     
     #%%
-    c_temporal = c_temporal[tp_comp]
-    c_spatial = c_spatial[tp_comp]   
-    #c_temporal_p = c_temporal_p[tp_comp]
-    
-    #%%
-    idx=0
-    plt.plot(c_temporal[idx])
-    plt.plot(signal_filter(c_temporal, freq=15, fr=400)[idx])
-    c_temporal_p = signal_filter(c_temporal, freq=15, fr=400)
-    c_spikes = extract_spikes(c_temporal_p, threshold=3.0)
-    
-    #%%    
-    c_result = {'F1':[], 'precision':[], 'recall':[]}
-    n_cells = len(tp_comp)
-    for idx in range(n_cells):
-        s1 = spikes[idx].flatten()
-        s2 = c_spikes[idx]
-        idx1_greedy, idx2_greedy = match_spikes_greedy(s1, s2, max_dist=3)
-        F1, precision, recall = compute_F1(s1, s2, idx1_greedy, idx2_greedy)
-        c_result['F1'].append(F1)
-        c_result['precision'].append(precision)
-        c_result['recall'].append(recall)
+        c_folder = os.path.join(folder, 'caiman')
+        caiman_files = [file for file in os.listdir(c_folder) if 'caiman_sim' in file][0]
+        c = np.load(os.path.join(c_folder, caiman_files), allow_pickle=True).item()
+        c_spatial = c.A.toarray().copy()
+        c_spatial = c_spatial.reshape([50, 50, c_spatial.shape[1]], order='F').transpose([2, 0, 1])
+        c_spatial_p = c_spatial.copy()
+        for idx in range(len(c_spatial_p)):
+            c_spatial_p[idx][c_spatial_p[idx] < c_spatial_p[idx].max() * 0.15] = 0
+            c_spatial_p[idx][c_spatial_p[idx] >= c_spatial_p[idx].max() * 0.15] = 1
+        c_temporal = c.C.copy()    
+       
+        #%%
+        plt.figure()
+        tp_gt, tp_comp, fn_gt, fp_comp, performance_cons_off = nf_match_neurons_in_binary_masks(
+                spatial, c_spatial_p, thresh_cost=0.95, min_dist=10, print_assignment=True,
+                plot_results=True, Cn=summary[0], labels=['gt', 'caiman'])    
         
-    if len(tp_comp) < 10:
-        print(f'missing {10-tp_comp} neurons')
-    print(f"caiman average 10 neurons:{np.array(c_result['F1']).sum()/10}")
+        #%%
+        c_temporal = c_temporal[tp_comp]
+        c_spatial = c_spatial[tp_comp]   
+        plt.figure(); plt.suptitle(f'distance:{dist}');plt.subplot(1,2,1);plt.imshow(c_spatial[0]); plt.subplot(1,2,2);plt.imshow(c_spatial[1]);
+        
+        #c_temporal_p = c_temporal_p[tp_comp]
+        
+        #%%
+        idx=0
+        plt.plot(c_temporal[idx])
+        plt.plot(signal_filter(c_temporal, freq=15, fr=400)[idx])
+        c_temporal_p = signal_filter(c_temporal, freq=15, fr=400)
+        c_spikes = extract_spikes(c_temporal_p, threshold=3.0)
+        
+        #%%    
+        c_result = {'F1':[], 'precision':[], 'recall':[]}
+        n_cells = len(tp_comp)
+        for idx in range(n_cells):
+            s1 = spikes[idx].flatten()
+            s2 = c_spikes[idx]
+            idx1_greedy, idx2_greedy = match_spikes_greedy(s1, s2, max_dist=3)
+            F1, precision, recall = compute_F1(s1, s2, idx1_greedy, idx2_greedy)
+            c_result['F1'].append(F1)
+            c_result['precision'].append(precision)
+            c_result['recall'].append(recall)
+            
+        if len(tp_comp) < 10:
+            print(f'missing {10-tp_comp} neurons')
+        print(f"caiman average 10 neurons:{np.array(c_result['F1']).sum()/10}")
+        
+        c_result_all.append(c_result)
+        #np.save(os.path.join(ROOT_FOLDER, 'result', 'caiman_threshold', f'caiman_thresh_{np.round(threshold, 2)}'), c_result_all)
     
-    c_result_all.append(c_result)
-    #np.save(os.path.join(ROOT_FOLDER, 'result', 'caiman_threshold', f'caiman_thresh_{np.round(threshold, 2)}'), c_result_all)
-
-    #np.save(os.path.join(folder, 'caiman_F1.npy'), c_result)
-    np.save(os.path.join(ROOT_FOLDER, 'result', 'thresh_3.0', f'caiman_thresh_{np.round(threshold, 2)}'), c_result_all)
-
+        #np.save(os.path.join(folder, 'caiman_F1.npy'), c_result)
+        #np.save(os.path.join(ROOT_FOLDER, 'result', 'thresh_3.0', f'caiman_thresh_{np.round(threshold, 2)}'), c_result_all)
+    np.save(os.path.join(ROOT_FOLDER, 'result_overlap', dist, f'caiman_{dist}'), c_result_all)
 
 #%%
 m_result_all = []
@@ -298,6 +349,15 @@ for name in names:
     m_temporal = np.array([-mov[:, sp].mean((1,2)) for sp in spatial_F])
     m_temporal_p = signal_filter(m_temporal, freq=15, fr=400)
     m_spikes = extract_spikes(m_temporal_p, threshold=3.0)
+    
+#%%
+    idx = 2
+    plt.plot(m_temporal[idx,:1000])
+    spk = spikes[idx][spikes[idx]<1000]
+    plt.vlines(spk, ymin=m_temporal[idx,:1000].max(), ymax=m_temporal[idx,:1000].max()+10 )
+    plt.savefig(os.path.join(SAVE_FOLDER, 'eg_trace_amplitude_0.15.pdf'))
+    
+#%%    
         
     m_result = {'F1':[], 'precision':[], 'recall':[]}
     n_cells = len(tp_comp)
@@ -433,6 +493,42 @@ for name in names:
     s_result_all.append(s_result)
 
     np.save(os.path.join(ROOT_FOLDER, 'result', 'thresh_3.0', f'sgpmd_thresh_{np.round(threshold, 2)}'), s_result_all)
+    
+#%% spikepursuit result
+sp_result_all = []
+names = [f'sim3_{i}' for i in range(10, 17)]
+for name in names:
+    folder = os.path.join(ROOT_FOLDER, name)
+    sp_folder = os.path.join(folder, 'spikepursuit')
+    output = scipy.io.loadmat(os.path.join(sp_folder, f'spikepursuit_{name}.mat'))['output'][0]
+    sp_spikes = []
+    for i in range(10):
+        sp_spikes.append(output[i]['spikeTimes'][0][0].flatten().astype(np.int16))
+
+    # load gt and mov
+    spatial, temporal, spikes = load_gt(folder)
+    movie_file = [file for file in os.listdir(folder) if 'hdf5' in file and 'flip' not in file][0]
+    mov = cm.load(os.path.join(folder, movie_file))
+        
+    sp_result = {'F1':[], 'precision':[], 'recall':[]}
+    n_cells = len(tp_comp)
+    for idx in range(n_cells):
+        s1 = spikes[idx].flatten()
+        s2 = sp_spikes[idx]
+        idx1_greedy, idx2_greedy = match_spikes_greedy(s1, s2, max_dist=3)
+        F1, precision, recall = compute_F1(s1, s2, idx1_greedy, idx2_greedy)
+        sp_result['F1'].append(F1)
+        sp_result['precision'].append(precision)
+        sp_result['recall'].append(recall)
+    
+    if len(tp_comp) < 10:
+        print(f'missing {10-tp_comp} neurons')
+    print(f"spikepursuit average 10 neurons:{np.array(sp_result['F1']).sum()/10}")
+    
+    
+    sp_result_all.append(sp_result)
+
+    np.save(os.path.join(ROOT_FOLDER, 'result', 'thresh_3.0', f'spikepursuit'), sp_result_all)
 
 #%%
 plt.plot(normalize(s_temporal[0])); plt.plot(normalize(s_temporal_p[0]));
@@ -469,24 +565,47 @@ for idx, results in enumerate(result_all):
     plt.ylabel('F1/precision/recall')
     plt.title('F1/precision/recall of different methods')
     
-#%%
+#%% new F1 score
 x = [round(0.05 + 0.025 * i, 3) for i in range(7)]    
 result_folder = '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/test_data/simulation/result/thresh_3.0'
-files = np.array(sorted(os.listdir(result_folder)))[np.array([4,0,3,2,1,-1])]
+files = np.array(sorted(os.listdir(result_folder)))[np.array([5, 0, 1, 2, 3, 4, 6])]
 result_all = [np.load(os.path.join(result_folder, file), allow_pickle=True) for file in files]
 for results in result_all:
-    #plt.plot(x, [np.array(result['F1']).sum()/10 for result in results])
-    plt.errorbar(x, [np.array(result['F1']).sum()/10 for result in results], 
-                     [np.std(np.array(result['F1'])) for result in results], 
-                     solid_capstyle='projecting', capsize=3)
+    plt.plot(x, [np.array(result['F1']).sum()/10 for result in results], marker='.')
+    #plt.errorbar(x, [np.array(result['F1']).sum()/10 for result in results], 
+    #                 [np.std(np.array(result['F1'])) for result in results], 
+    #                 solid_capstyle='projecting', capsize=3)
     
     
     plt.legend([file for file in files])
     plt.xlabel('spike amplitude')
     plt.ylabel('F1 score')
-    plt.title('F1 score at threshold 3.0')
+    plt.title('F1 score of all methods')
 
-#%%
+plt.savefig(os.path.join(SAVE_FOLDER, 'VolPy_F1_scores_comparison.pdf'))
+
+    
+#%% F1 score for ridge bg
+x = [round(0.05 + 0.025 * i, 3) for i in range(7)]    
+result_folder = '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/test_data/simulation/result/volpy_ridge_bg'
+files = np.array(os.listdir(result_folder))[np.array([1, 2,0,3,  4])]
+result_all = [np.load(os.path.join(result_folder, file), allow_pickle=True) for file in files]
+for results in result_all:
+    plt.plot(x, [np.array(result['F1']).sum()/10 for result in results], marker='.', linewidth=1)
+    #plt.errorbar(x, [np.array(result['F1']).sum()/10 for result in results], 
+    #                 [np.std(np.array(result['F1'])) for result in results], 
+    #                 solid_capstyle='projecting', capsize=3)
+    
+    
+    plt.legend([file for file in files])
+    plt.xlabel('spike amplitude')
+    plt.ylabel('F1 score')
+    plt.title('F1 score at different bg')
+
+plt.savefig(os.path.join(SAVE_FOLDER, 'VolPy_ridge_vs_linear_regression.pdf'))
+
+
+#%% F1 with precision/recall
 x = [round(0.05 + 0.025 * i, 3) for i in range(7)]    
 result_folder = '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/test_data/simulation/result/thresh_3.0'
 files = np.array(sorted(os.listdir(result_folder)))[np.array([4,0,3,2,1,-1])]
@@ -504,8 +623,67 @@ for idx, results in enumerate(result_all):
     plt.ylabel('F1/precision/recall')
     plt.title('F1/precision/recall of different methods')
 
+#%% Overlapping neurons for volpy with different overlapping areas
+names = [f'sim4_{i}' for i in range(1, 16)]
+distance = [f'dist_{i}' for i in [5, 6, 7, 10, 15]]
+area = []
+
+
+for idx, dist in enumerate(distance):  
+    select = np.arange(idx * 3, (idx + 1) * 3)
+    v_result_all = []
+    #names = [f'sim3_{i}' for i in range(10, 17)]
+    for name in np.array(names)[select]:
+        folder = os.path.join(ROOT_FOLDER, name)
+        spatial, temporal, spikes = load_gt(folder)
+        percent = (np.where(spatial.sum(axis=0) > 1)[0].shape[0])/(np.where(spatial.sum(axis=0) > 0)[0].shape[0])
+        area.append(percent)   
+        
+area = np.round(np.unique(area), 2)[::-1]
 
 #%%
+result_all = {}
+distance = [f'dist_{i}' for i in [5, 6, 7, 10, 15]]
+x = [round(0.075 + 0.05 * i, 3) for i in range(3)] 
+for dist in distance:   
+    result_folder = f'/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/test_data/simulation/result_overlap/{dist}'
+    files = np.array(sorted(os.listdir(result_folder)))#[0]#[np.array([5, 0, 1, 2, 3, 4, 6])]
+    files = [file for file in files if 'volpy' in file]
+    result_all[files[0]] = np.load(os.path.join(result_folder, files[0]), allow_pickle=True)
+    #result_all[files[1]] = np.load(os.path.join(result_folder, files[1]), allow_pickle=True)
+    
+    
+for idx, key in enumerate(result_all.keys()):
+    results = result_all[key]
+    plt.plot(x, [np.array(result['F1']).sum()/2 for result in results], marker='.', label=f'{area[idx]:.0%}')
+
+    plt.legend()
+    plt.xlabel('spike amplitude')
+    plt.ylabel('F1 score')
+    plt.title('VolPy F1 score with different overlapping areas')
+    
+plt.savefig(os.path.join(SAVE_FOLDER, 'VolPy_overlapping_neurons.pdf'))
+    
+#%% VolPy vs CaImAn
+x = [round(0.075 + 0.05 * i, 3) for i in range(3)] 
+result_folder = '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/test_data/simulation/result_overlap/dist_5'
+files = np.array(sorted(os.listdir(result_folder)))[np.array([1,0])]
+result_all = [np.load(os.path.join(result_folder, file), allow_pickle=True) for file in files]
+for results in result_all:
+    plt.plot(x, [np.array(result['F1']).sum()/2 for result in results])
+    #plt.errorbar(x, [np.array(result['F1']).sum()/10 for result in results], 
+    #                 [np.std(np.array(result['F1'])) for result in results], 
+    #                 solid_capstyle='projecting', capsize=3)
+    
+    plt.legend([file for file in files])
+    plt.xlabel('spike amplitude')
+    plt.ylabel('F1 score')
+    plt.title('F1 score of all methods')   
+    
+#%%
+    
+    
+#%% sgpmd
 result_folder = '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/test_data/simulation/result/sgpmd_threshold'
 files = sorted(os.listdir(result_folder))
 files = np.array(files)[np.array([0, 3, 5, 10, 15])]
@@ -526,7 +704,7 @@ for idx, results in enumerate(result_all):
     plt.ylabel('F1/precision/recall')
     plt.title('sgpmd F1 with different threshold')
     
-#%%
+#%% volpy
 result_folder = '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/test_data/simulation/result/volpy_threshold'
 files = sorted(os.listdir(result_folder))
 files = np.array(files)[np.array([0, 1, 4, 6, 11])]
@@ -547,7 +725,7 @@ for idx, results in enumerate(result_all):
     plt.ylabel('F1/precision/recall')
     plt.title('VolPy F1 with different threshold')
     
-#%%
+#%% caiman
 result_folder = '/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/test_data/simulation/result/caiman_threshold'
 files = sorted(os.listdir(result_folder))
 files = np.array(files)[np.array([0, 3, 5, 10, 15])]

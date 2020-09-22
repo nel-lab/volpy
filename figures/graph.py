@@ -63,7 +63,18 @@ ax.legend()
 
 #plt.savefig('/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Figures/plos/original_files/figure3/F1_L1.pdf')
 plt.savefig('/home/nel/NEL-LAB Dropbox/NEL/Papers/VolPy/Figures/plos/original_files/figure3/F1_TEG.pdf')
-     
+
+#%%
+import os
+folder = '/home/nel/Code/NEL_LAB/Mask_RCNN/datasets/voltage_v1.2_L1_4/train'
+folder = '/home/nel/Code/NEL_LAB/Mask_RCNN/datasets/voltage_v1.2_TEG_2/val'
+files = os.listdir(folder)
+files = [file for file in files if 'mask' in file]
+nn = 0
+for file in files:
+    n = np.load(os.path.join(folder, file), allow_pickle=True)['mask'].shape[0]
+    nn = nn + n
+    print(nn)
 #%%
 folder = '/home/nel/Code/NEL_LAB/Mask_RCNN/result_f1/cross'
 files = os.listdir(folder)

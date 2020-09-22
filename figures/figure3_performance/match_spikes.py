@@ -89,6 +89,7 @@ def match_spikes_greedy(s1, s2, max_dist):
     temp1 = 0
     temp2 = 0
     while len(l1) * len(l2) > 0:
+        #print(np.abs(l1[0] - l2[0]))
         if np.abs(l1[0] - l2[0]) <= max_dist:
             idx1.append(temp1)
             idx2.append(temp2)

@@ -55,7 +55,7 @@ def run_volpy(fnames, options=None, do_motion_correction=True, do_memory_mapping
 
     # %%  Load demo movie and ROIs
     file_dir = os.path.split(fnames)[0]
-    path_ROIs = [file for file in os.listdir(file_dir) if 'ROIs' in file]
+    path_ROIs = [file for file in os.listdir(file_dir) if 'ROIs_gt' in file]
     if len(path_ROIs)>0:
         path_ROIs = path_ROIs[0]
     
